@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="th">
+<head><style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MNS Trade Navigator V4.0 - Master System Hub</title>
+<meta property="og:title" content="MNS Trade Navigator V4.0 - Master System Hub">
+<meta property="og:description" content="ระบบแผนที่นำทางอัจฉริยะ XAU/USD | เห็นก่อน รู้ก่อน คิดก่อน ทำก่อน">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#030712;color:#f8fafc;font-family:Prompt,Sarabun,sans-serif;text-align:center;padding:20px}
+.gold{color:#fbbf24}
+.card{max-width:800px;margin:20px auto;background:#0f172a;border:2px solid #fbbf24;border-radius:24px;padding:32px;box-shadow:0 0 40px rgba(251,191,36,0.2)}
+.badge{display:inline-block;padding:8px 16px;border-radius:30px;background:rgba(251,191,36,0.15);border:1px solid #fbbf24;color:#fbbf24;font-size:14px;margin:6px;font-weight:bold}
+.hub-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:24px 0;text-align:left}
+.hub-card{background:#1e293b;border:1px solid #334155;border-radius:18px;padding:22px;transition:all 0.3s ease;text-decoration:none;display:block}
+.hub-card:hover{border-color:#fbbf24;transform:translateY(-3px);box-shadow:0 0 20px rgba(251,191,36,0.2)}
+.hub-title{font-size:18px;font-weight:bold;color:#fbbf24;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.hub-desc{font-size:14px;color:#94a3b8;line-height:1.5}
+.btn{display:block;width:100%;padding:18px;margin:14px 0;border-radius:14px;font-weight:bold;font-size:18px;text-decoration:none;transition:all 0.3s ease}
+.btn-gold{background:linear-gradient(90deg,#f59e0b,#fbbf24,#fde047);color:#000;box-shadow:0 0 20px rgba(251,191,36,0.4)}
+.btn-gold:hover{transform:scale(1.02);box-shadow:0 0 25px rgba(251,191,36,0.6)}
+.btn-dark{background:#1e293b;color:#fff;border:1px solid #334155}
+.btn-dark:hover{background:#334155;border-color:#38bdf8}
+</style>
+</head>
+<body>
+
+<h1 class="gold" style="font-size: 34px; font-weight: 900; letter-spacing: 1px;">MNS TRADE NAVIGATOR V4.0</h1>
+<p style="font-size: 18px; color: #94a3b8;">ศูนย์กลางระบบแผนที่นำทางตลาด XAU/USD (Master Hub)</p>
+
+<div class="card">
+  <div>
+    <span class="badge">🔥 MASTER HUB 24H</span>
+    <span class="badge" style="background: rgba(16,185,129,0.15); border-color:#10b981; color:#34d399;">🌟 SYSTEM STATUS: ONLINE</span>
+    <span class="badge">XAU/USD MULTI-DIMENSION</span>
+  </div>
+
+  <div style="margin:24px 0; text-align:left; background:#1e293b; border:1px solid #334155; border-radius:18px; padding:24px;">
+    <div style="font-size: 18px; font-weight: bold; color: #38bdf8; margin-bottom: 8px;">💡 แก่นปรัชญาการทำงาน (Master Philosophy)</div>
+    <div style="font-size: 15px; color: #cbd5e1; line-height: 1.6;"><b>"เห็นก่อน รู้ก่อน คิดก่อน ทำก่อน"</b> — ระบบนำทางอัจฉริยะที่ออกแบบมาเพื่อให้คุณเห็นโครงสร้างตลาด วิเคราะห์ความเสี่ยง และเข้าถึงรายงานแผนปฏิบัติการล่วงหน้าได้อย่างแม่นยำ เลือกเมนูด้านล่างเพื่อเริ่มต้นใช้งานระบบย่อยที่คุณต้องการ</div>
+  </div>
+
+  <!-- เมนูหลักใน Master Hub -->
+  <div class="hub-grid">
+    <a href="quality-dashboard.html" class="hub-card">
+      <div class="hub-title"><span>📊</span> 1. วิเคราะห์ & รายงานแผน</div>
+      <div class="hub-desc">เจาะลึกมิติคุณภาพ Map (98/100) และติดตามรายงานแผน A / แผน B สดใหม่ Real-Time</div>
+    </a>
+    <a href="https://nass9055.github.io/Trade-Navigator-/" target="_blank" class="hub-card">
+      <div class="hub-title"><span>📈</span> 2. กราฟสด Real-Time</div>
+      <div class="hub-desc">ติดตามกราฟราคา XAU/USD และเครื่องมือวิเคราะห์เชิงเทคนิคระดับมืออาชีพแบบสดๆ</div>
+    </a>
+    <a href="https://nass9055.github.io/Trade-Navigator-/" target="_blank" class="hub-card">
+      <div class="hub-title"><span>⚙️</span> 3. ตั้งค่าระบบดักราคา</div>
+      <div class="hub-desc">กำหนดเงื่อนไขการแจ้งเตือนและระบบตั้ง Limit Order ล่วงหน้าก่อนราคามาถึงโซน</div>
+    </a>
+    <a href="https://nass9055.github.io/Trade-Navigator-/" target="_blank" class="hub-card">
+      <div class="hub-title"><span>📚</span> 4. คู่มือการใช้งาน</div>
+      <div class="hub-desc">ศึกษาแนวคิดการกำหนดจุดตัดขาดทุน (SL) และการใช้งานระบบ Proactive Map อย่างถูกต้อง</div>
+    </a>
+  </div>
+
+  <a class="btn btn-gold" href="quality-dashboard.html">🚀 เปิดหน้าวิเคราะห์คุณภาพ Map & รายงานแผน</a>
+  <a class="btn btn-dark" href="https://nass9055.github.io/Trade-Navigator-/" target="_blank">🌐 ไปยังหน้าแพลตฟอร์มหลักภายนอก</a>
+  
+  <p style="margin-top:18px;font-size:14px;opacity:0.7">ฟรี! ไม่มีค่าใช้จ่าย • ระบบประมวลผลอัตโนมัติ • ไม่ต้องเดาหน้างาน</p>
+</div>
+
+<p style="font-size:12px;opacity:0.5;margin-top:15px">Repo ใหม่: mns-free | https://nass9055.github.io/mns-free/</p>
+</body>
+</html>
