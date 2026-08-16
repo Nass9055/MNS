@@ -1,0 +1,388 @@
+/* ============================================================ */
+/* 🧭 MNS — MARKET NAVIGATION SYSTEM */
+/* SINGLE FILE GITHUB EDITION */
+/* Version: 3.0.0 */
+/* ============================================================ */
+
+const CONFIG = {
+  VERSION: '3.0.0',
+  DECIMALS: 2,
+  MIN_RR: 2.5,
+  MIN_CONFIDENCE: 55,
+  CONSENSUS_THRESHOLD: 70,
+  TOP_N_PLANS: 3,
+  MIN_PLAN_SCORE: 50,
+  EVENT_ARM_MINUTES: 60,
+  PLAN_EXPIRY_MINUTES: 360,
+  NAVI_WEIGHTS: {
+    MARKET_ALIGNMENT: 0.25,
+    CONFIDENCE: 0.20,
+    RISK_REWARD: 0.25,
+    TIMELINESS: 0.15,
+    LOCATION_QUALITY: 0.15
+  },
+  STATUS: {
+    ARMED: 'ARMED',
+    TRIGGERED: 'TRIGGERED',
+    WAIT_EXECUTION: 'WAIT_EXECUTION',
+    ACTIVE: 'ACTIVE',
+    MISSED: 'MISSED',
+    INVALIDATED: 'INVALIDATED',
+    EXPIRED: 'EXPIRED'
+  },
+  TRAP_TYPES: {
+    PULLBACK: 'PULLBACK_TRAP',
+    EVENT: 'EVENT_TRAP',
+    TIME: 'TIME_TRAP',
+    DIRECT: 'DIRECT_TRAP'
+  }
+};
+
+class MNSUtils {
+  static round(value, decimals = CONFIG.DECIMALS) {
+    if (!Number.isFinite(value)) return null;
+    return Number(value.toFixed(decimals));
+  }
+  static clamp(value, min = 0, max = 100) {
+    return Math.max(min, Math.min(max, value));
+  }
+  static pctDistance(a, b) {
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a === 0) return 999;
+    return (Math.abs(a - b) / Math.abs(a)) * 100;
+  }
+  static minutesSince(timestamp) {
+    if (!timestamp) return Infinity;
+    return (Date.now() - timestamp) / 60000;
+  }
+  static now() {
+    return Date.now();
+  }
+}
+
+class MNSPreFlight {
+  static run(packet) {
+    const checks = [];
+    checks.push({ name: 'SOURCE', pass: !!packet });
+    const timestamp = packet?.timestamp || Date.now();
+    checks.push({ name: 'FRESHNESS', pass: Date.now() - timestamp <= 5 * 60 * 1000 });
+    checks.push({ name: 'MARKET', pass: !!packet?.market });
+    const bid = packet?.market?.bid;
+    const ask = packet?.market?.ask;
+    checks.push({ name: 'CONSISTENCY', pass: Number.isFinite(bid) && Number.isFinite(ask) && bid < ask });
+    checks.push({ name: 'CONFLICT', pass: packet?.conflict !== true });
+    checks.push({ name: 'VISION', pass: !!packet?.vision });
+    const spread = packet?.market?.spread;
+    checks.push({ name: 'SPREAD', pass: Number.isFinite(spread) && spread > 0 && spread <= 5.0 });
+    return {
+      passed: checks.every(check => check.pass),
+      checks
+    };
+  }
+}
+
+class MNSMap {
+  constructor(data = {}) {
+    this.timestamp = data.timestamp || Date.now();
+    this.midPrice = data.market?.mid ?? data.midPrice;
+    this.executionData = {
+      bid: data.market?.bid,
+      ask: data.market?.ask,
+      spread: data.market?.spread ?? data.spread
+    };
+    this.decimals = data.market?.decimals ?? data.decimals ?? CONFIG.DECIMALS;
+    this.multiTF = data.multiTF || [];
+    this.structure = data.structure || {};
+    this.liquidity = data.liquidity || {};
+    this.liquidityFlow = data.liquidityFlow || {};
+    this.location = data.location || {};
+    this.zones = data.zones || {};
+    this.range = data.range || {};
+    this.session = data.session || {};
+    this.event = data.event || {};
+    this.cycle = data.cycle || {};
+    this.priceBehavior = data.priceBehavior || {};
+    this.timeBehavior = data.timeBehavior || {};
+    this.centralBank = data.centralBank || {};
+    this.entity = data.entity || {};
+    this.news = data.news || {};
+    this.etfFlow = data.etfFlow || {};
+    this.positioning = data.positioning || {};
+    this.historicalMemory = data.historicalMemory || {};
+    this.marketMemory = data.marketMemory || {};
+    this.levels = data.levels || {};
+    this.changeDetection = data.changeDetection || {};
+    this.conflictDetection = data.conflictDetection || {};
+    this.futureLocations = [];
+    this.qualityScore = 0;
+    this.direction = 'NEUTRAL';
+    this.confidence = 50;
+  }
+  getSpread() {
+    return this.executionData.spread;
+  }
+  calcTFAlignment() {
+    const weights = { '4H': 3, '1H': 2, '15M': 1.5, '5M': 1 };
+    let up = 0, down = 0, neutral = 0;
+    this.multiTF.forEach(tf => {
+      const weight = weights[tf.name] || 1;
+      if (tf.direction === 'UP') up += weight;
+      else if (tf.direction === 'DOWN') down += weight;
+      else neutral += weight;
+    });
+    const directional = up + down;
+    if (!directional) return { score: 50, direction: 'NEUTRAL', up, down, neutral };
+    const score = Math.round((Math.max(up, down) / directional) * 100);
+    let direction = 'NEUTRAL';
+    if (up > down) direction = 'UP';
+    else if (down > up) direction = 'DOWN';
+    return { score, direction, up, down, neutral };
+  }
+  getDirectionAndRoute() {
+    const tf = this.calcTFAlignment();
+    let up = tf.up, down = tf.down;
+    if (this.structure.swingLowConfirmed) up += 1.5;
+    if (this.structure.swingHighConfirmed) down += 1.5;
+    if (this.priceBehavior.rejectionUp) up += 1;
+    if (this.priceBehavior.rejectionDown) down += 1;
+    const total = up + down;
+    const confidence = total ? Math.round((Math.max(up, down) / total) * 100) : 50;
+    let primary = 'NEUTRAL';
+    if (confidence >= CONFIG.MIN_CONFIDENCE) {
+      if (up > down) primary = 'UP';
+      else if (down > up) primary = 'DOWN';
+    }
+    let route;
+    if (primary === 'UP') {
+      route = { path: 'FUTURE LOCATION -> SUPPORT -> BUY TRAP', target: this.zones.support ?? null };
+    } else if (primary === 'DOWN') {
+      route = { path: 'FUTURE LOCATION -> RESISTANCE -> SELL TRAP', target: this.zones.resistance ?? null };
+    } else {
+      route = { path: 'WAIT -> DECISION LOCATION', target: null };
+    }
+    this.direction = primary;
+    this.confidence = confidence;
+    return { primary, confidence, route };
+  }
+  calculateQuality() {
+    const tf = this.calcTFAlignment();
+    const structureScore = (this.structure.swingLowConfirmed || this.structure.swingHighConfirmed) ? 75 : 50;
+    const locationScore = Number.isFinite(this.location.quality) ? this.location.quality : 50;
+    const behaviorScore = Number.isFinite(this.priceBehavior.quality) ? this.priceBehavior.quality : 50;
+    const eventScore = Number.isFinite(this.event.riskScore) ? this.event.riskScore : 50;
+    this.qualityScore = Math.round(
+      tf.score * 0.30 +
+      structureScore * 0.20 +
+      locationScore * 0.20 +
+      behaviorScore * 0.15 +
+      eventScore * 0.15
+    );
+    return this.qualityScore;
+  }
+}
+
+class FutureLocationDetector {
+  constructor(map) {
+    this.map = map;
+  }
+  detect() {
+    const locations = [];
+    const support = this.map.zones.support;
+    if (Number.isFinite(support)) {
+      locations.push({
+        id: 'FL-BUY-SUPPORT',
+        price: support,
+        type: 'LIQUIDITY_RETEST',
+        role: 'BUY_TRAP_LOCATION',
+        direction: 'BUY',
+        source: 'SUPPORT',
+        quality: this.map.structure.swingLowConfirmed ? 80 : 60,
+        validity: 'VALID'
+      });
+    }
+    const resistance = this.map.zones.resistance;
+    if (Number.isFinite(resistance)) {
+      locations.push({
+        id: 'FL-SELL-RESISTANCE',
+        price: resistance,
+        type: 'LIQUIDITY_RETEST',
+        role: 'SELL_TRAP_LOCATION',
+        direction: 'SELL',
+        source: 'RESISTANCE',
+        quality: this.map.structure.swingHighConfirmed ? 80 : 60,
+        validity: 'VALID'
+      });
+    }
+    this.map.futureLocations = locations;
+    return locations;
+  }
+}
+
+class MNSPlanEngine {
+  constructor(map, directionData) {
+    this.map = map;
+    this.directionData = directionData;
+    this.plans = [];
+    this.counter = 0;
+  }
+  buildAllPlans() {
+    this.plans = [];
+    for (const location of this.map.futureLocations) {
+      const plan = this.buildTrap(location, location.direction, CONFIG.TRAP_TYPES.PULLBACK);
+      if (plan) this.plans.push(plan);
+    }
+    this.createEventPlans();
+    return this.plans;
+  }
+  calculateTechnicalSL(location, direction) {
+    const buffer = Number.isFinite(this.map.range.buffer) ? this.map.range.buffer : Math.abs(location.price) * 0.001;
+    return direction === 'BUY' ? location.price - buffer : location.price + buffer;
+  }
+  buildTrap(location, direction, type) {
+    const technicalSL = this.calculateTechnicalSL(location, direction);
+    const spread = this.map.getSpread();
+    if (!Number.isFinite(spread) || spread <= 0) return null;
+    const executionSL = direction === 'BUY' ? technicalSL - spread : technicalSL + spread;
+    const entry = location.price;
+    const risk = Math.abs(entry - executionSL);
+    if (!risk) return null;
+    const tp1 = direction === 'BUY' ? entry + risk * 1.5 : entry - risk * 1.5;
+    const tp2 = direction === 'BUY' ? entry + risk * CONFIG.MIN_RR : entry - risk * CONFIG.MIN_RR;
+    return {
+      id: `MNS-${++this.counter}`,
+      name: direction === 'BUY' ? 'Pullback Trap BUY' : 'Pullback Trap SELL',
+      type,
+      direction,
+      locationId: location.id,
+      locationType: location.type,
+      locationPrice: MNSUtils.round(location.price, this.map.decimals),
+      locationQuality: location.quality,
+      entry: MNSUtils.round(entry, this.map.decimals),
+      technicalSL: MNSUtils.round(technicalSL, this.map.decimals),
+      executionSL: MNSUtils.round(executionSL, this.map.decimals),
+      tp1: MNSUtils.round(tp1, this.map.decimals),
+      tp2: MNSUtils.round(tp2, this.map.decimals),
+      rr: CONFIG.MIN_RR,
+      confidence: this.directionData.confidence,
+      trigger: {
+        type: 'REJECTION_CONFIRMATION',
+        condition: direction === 'BUY' ? 'Touch BUY Future Location and Reject UP' : 'Touch SELL Future Location and Reject DOWN'
+      },
+      invalidation: MNSUtils.round(technicalSL, this.map.decimals),
+      state: CONFIG.STATUS.ARMED,
+      preemptive: true,
+      armedAt: Date.now(),
+      armPrice: this.map.midPrice,
+      triggeredAt: null,
+      activeAt: null,
+      invalidatedAt: null,
+      missedAt: null,
+      expiredAt: null,
+      logic: 'Future Location -> Trap -> Trigger -> Execution'
+    };
+  }
+  createEventPlans() {
+    const event = this.map.event;
+    if (!event || !event.active || !Number.isFinite(event.strikePrice)) return;
+    const direction = event.direction || 'BUY';
+    const entry = event.strikePrice;
+    const technicalSL = direction === 'BUY' ? entry - (this.map.range.buffer || entry * 0.001) : entry + (this.map.range.buffer || entry * 0.001);
+    const spread = this.map.getSpread();
+    if (!Number.isFinite(spread)) return;
+    const executionSL = direction === 'BUY' ? technicalSL - spread : technicalSL + spread;
+    const risk = Math.abs(entry - executionSL);
+    if (!risk) return;
+    const tp1 = direction === 'BUY' ? entry + risk * 1.5 : entry - risk * 1.5;
+    const tp2 = direction === 'BUY' ? entry + risk * CONFIG.MIN_RR : entry - risk * CONFIG.MIN_RR;
+    this.plans.push({
+      id: `MNS-${++this.counter}`,
+      name: direction === 'BUY' ? 'Event Trap BUY' : 'Event Trap SELL',
+      type: CONFIG.TRAP_TYPES.EVENT,
+      direction,
+      locationId: 'FL-EVENT',
+      locationType: 'EVENT_STRIKE',
+      locationPrice: MNSUtils.round(entry, this.map.decimals),
+      locationQuality: 85,
+      entry: MNSUtils.round(entry, this.map.decimals),
+      technicalSL: MNSUtils.round(technicalSL, this.map.decimals),
+      executionSL: MNSUtils.round(executionSL, this.map.decimals),
+      tp1: MNSUtils.round(tp1, this.map.decimals),
+      tp2: MNSUtils.round(tp2, this.map.decimals),
+      rr: CONFIG.MIN_RR,
+      confidence: this.directionData.confidence,
+      trigger: {
+        type: 'NEWS_VOLATILITY',
+        condition: 'News and Spike'
+      },
+      invalidation: MNSUtils.round(technicalSL, this.map.decimals),
+      state: CONFIG.STATUS.ARMED,
+      preemptive: true,
+      armedAt: Date.now(),
+      armPrice: this.map.midPrice,
+      triggeredAt: null,
+      activeAt: null,
+      invalidatedAt: null,
+      missedAt: null,
+      expiredAt: null,
+      logic: 'Event Strike -> Pre-Emptive Trap -> News Spike'
+    });
+  }
+}
+
+class MNSNavi {
+  constructor(map, plans) {
+    this.map = map;
+    this.plans = plans;
+    this.scoredPlans = [];
+  }
+  scorePlan(plan) {
+    const weights = CONFIG.NAVI_WEIGHTS;
+    let marketAlignment = 50;
+    if (this.map.direction === plan.direction) marketAlignment = 100;
+    else if (this.map.direction === 'NEUTRAL') marketAlignment = 60;
+    else marketAlignment = 20;
+    const confidence = MNSUtils.clamp(plan.confidence || 50);
+    const rr = plan.rr || CONFIG.MIN_RR;
+    const rrScore = MNSUtils.clamp((rr / CONFIG.MIN_RR) * 70, 0, 100);
+    const distPct = MNSUtils.pctDistance(this.map.midPrice, plan.entry);
+    const timeliness = MNSUtils.clamp(100 - (distPct * 20), 10, 100);
+    const locationQuality = MNSUtils.clamp(plan.locationQuality || 50);
+    const totalScore = Math.round(
+      marketAlignment * weights.MARKET_ALIGNMENT +
+      confidence * weights.CONFIDENCE +
+      rrScore * weights.RISK_REWARD +
+      timeliness * weights.TIMELINESS +
+      locationQuality * weights.LOCATION_QUALITY
+    );
+    return {
+      ...plan,
+      score: totalScore,
+      metrics: { marketAlignment, confidence, rrScore, timeliness, locationQuality }
+    };
+  }
+  process() {
+    const validPlans = this.plans.filter(p => p.state === CONFIG.STATUS.ARMED);
+    this.scoredPlans = validPlans
+      .map(p => this.scorePlan(p))
+      .filter(p => p.score >= CONFIG.MIN_PLAN_SCORE)
+      .sort((a, b) => b.score - a.score);
+    return this.scoredPlans.slice(0, CONFIG.TOP_N_PLANS);
+  }
+  generateReport() {
+    const topPlans = this.process();
+    const quality = this.map.calculateQuality();
+    const routeInfo = this.map.getDirectionAndRoute();
+    return {
+      version: CONFIG.VERSION,
+      timestamp: new Date().toISOString(),
+      market: {
+        midPrice: this.map.midPrice,
+        direction: routeInfo.primary,
+        confidence: routeInfo.confidence,
+        qualityScore: quality,
+        route: routeInfo.route
+      },
+      topPlans
+    };
+  }
+}
+      
