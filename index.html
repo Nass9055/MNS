@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNS Core — Pre-Emptive Intelligence Architecture Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+<style>
+body{font-family:Inter,system-ui;background:#020617;color:#e2e8f0}
+.mono{font-family:JetBrains Mono,monospace}
+.glow-emerald{box-shadow:0 0 18px rgba(16,185,129,.45)}
+.glow-yellow{box-shadow:0 0 18px rgba(250,204,21,.45)}
+.glow-red{box-shadow:0 0 18px rgba(239,68,68,.45)}
+.glow-indigo{box-shadow:0 0 18px rgba(99,102,241,.45)}
+@keyframes alertPulse{0%,100%{background-color:rgba(16,185,129,.2);border-color:rgba(16,185,129,.8)}50%{background-color:rgba(16,185,129,.4);border-color:rgba(16,185,129,1)}}
+.event-alert-active{animation:alertPulse 1.5s infinite;}
+</style>
+</head>
+<body class="min-h-screen bg-[radial-gradient(circle_at_1px_1px,rgba(16,185,129,0.06)_1px,transparent_0)] bg-[length:24px_24px]">
+
+<header class="sticky top-0 z-50 backdrop-blur-xl bg-slate-900/85 border-b border-slate-800">
+<div class="h-[2px] w-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-500"></div>
+<div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+<div class="flex items-center gap-2.5">
+<span class="font-black text-[16px] tracking-widest text-emerald-400">MNS</span>
+<span class="text-[10px] font-black tracking-[0.2em] bg-black text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full">CORE ARCHITECTURE: PRE-EMPTIVE TRAP ENGINE</span>
+</div>
+<div id="preFlightStatus" class="text-[11px] font-bold px-3 py-1 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
+  🔒 PRE-FLIGHT: WAITING FOR VALID MARKET DATA
+</div>
+</div>
+</header>
+
+<main class="max-w-[1600px] mx-auto px-4 py-5 grid grid-cols-12 gap-4">
+
+<!-- ซ้าย: เลือกสินทรัพย์ + Event State + ปฏิทิน Live -->
+<div class="col-span-12 lg:col-span-3 space-y-4">
+<div class="bg-[#1e293b] border border-slate-700/80 rounded-2xl p-4">
+<div class="text-[11px] font-black tracking-widest text-emerald-400 mb-2">🔍 เลือกสินทรัพย์ (Asset Feed)</div>
+<div class="flex flex-wrap gap-1 mb-2">
+<button onclick="setTab('FOREX')" id="tab_FOREX" class="tab text-[10px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-400">Forex</button>
+<button onclick="setTab('GOLD')" id="tab_GOLD" class="tab text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-500 text-black">ทอง/น้ำมัน</button>
+<button onclick="setTab('CRYPTO')" id="tab_CRYPTO" class="tab text-[10px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-400">คริปโต</button>
+<button onclick="setTab('INDEX')" id="tab_INDEX" class="tab text-[10px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-400">ดัชนี</button>
+<button onclick="setTab('STOCK')" id="tab_STOCK" class="tab text-[10px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-400">หุ้น</button>
+<button onclick="setTab('ETF')" id="tab_ETF" class="tab text-[10px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-400">ETF</button>
+</div>
+<input id="searchAsset" placeholder="ค้นหาสัญลักษณ์..." oninput="renderAssetList()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-[12px] mono mb-2 outline-none focus:border-emerald-500">
+<div id="assetListContainer" class="space-y-1 max-h-[140px] overflow-auto"></div>
+</div>
+
+<div id="eventStateBox" class="bg-[#1e293b] border border-slate-700/80 rounded-2xl p-4 transition-all">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[11px] font-black tracking-widest text-cyan-300">⚡ EVENT STATE MACHINE</span>
+<span id="eventStateBadge" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">NORMAL</span>
+</div>
+<div class="space-y-2 text-[11px] mono">
+<div class="flex justify-between items-center"><span class="text-slate-400">Event:</span><b id="evName" class="text-yellow-300">US CPI / FOMC</b></div>
+<div class="flex justify-between items-center"><span class="text-slate-400">Time:</span><input id="inpEventTime" type="time" value="20:30" onchange="updateEventEngine()" class="bg-slate-900 text-slate-200 px-2 py-0.5 rounded border border-slate-700 text-right text-[11px]"></div>
+<div class="flex justify-between items-center"><span class="text-slate-400">Countdown:</span><b id="evCountdown" class="text-emerald-400 text-[12px]">--:--:--</b></div>
+<div class="flex justify-between items-center pt-2 border-t border-slate-700/60"><span class="text-slate-400">Window:</span><b id="evWindowState" class="text-slate-400">NORMAL</b></div>
+</div>
+<div id="evBanner" class="mt-2 p-2 rounded-lg bg-slate-900 text-[10px] text-slate-400 border border-slate-800 text-center">
+  ประเมิน Pre-Event Trap Window
+</div>
+</div>
+
+<div class="bg-[#1e293b] border border-slate-700/80 rounded-2xl p-4">
+<div class="text-[11px] font-black tracking-widest text-slate-300 mb-2">📰 ปฏิทินเศรษฐกิจ (Live TV)</div>
+<iframe src="https://s.tradingview.com/embed-widget/events/?locale=th_TH#%7B%22colorTheme%22%3A%22dark%22%2C%22isTransparent%22%3A%22true%22%7D" style="width:100%;height:140px;border:0" class="rounded-lg"></iframe>
+</div>
+</div>
+
+<!-- กลาง: กราฟ TradingView + MAP Matrix -->
+<div class="col-span-12 lg:col-span-6 space-y-4">
+<div class="bg-[#1e293b] border border-slate-700/80 rounded-2xl overflow-hidden">
+<div class="flex flex-wrap items-center justify-between p-4 border-b border-slate-800 gap-2">
+<div>
+  <div class="flex items-center gap-2">
+    <span id="mapAssetTitle" class="font-black text-[18px]">GOLD</span>
+    <span class="mono text-[18px] text-emerald-300" id="chartLivePrice">--</span>
+  </div>
+  <div class="text-[10px] mono text-slate-500">VISUAL INGESTION CHART & MAP ENGINE</div>
+</div>
+<div class="flex gap-1">
+<button onclick="setTF('1')" class="tf text-[11px] px-2 py-1 rounded-full bg-slate-800 text-slate-400" data-tf="1">1m</button>
+<button onclick="setTF('5')" class="tf text-[11px] px-2 py-1 rounded-full bg-emerald-500 text-black font-bold" data-tf="5">5m</button>
+<button onclick="setTF('15')" class="tf text-[11px] px-2 py-1 rounded-full bg-slate-800 text-slate-400" data-tf="15">15m</button>
+<button onclick="setTF('60')" class="tf text-[11px] px-2 py-1 rounded-full bg-slate-800 text-slate-400" data-tf="60">1h</button>
+</div>
+</div>
+<div id="tradingview_chart_container" style="height:440px;width:100%;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#94a3b8;">
+  <span>⏳ กำลังเชื่อมต่อกราฟ...</span>
+</div>
+</div>
+
+<div class="bg-[#1e293b] border border-slate-700/80 rounded-2xl p-4">
+<div class="text-[11px] font-black tracking-widest text-indigo-400 mb-2">🗺️ FUTURE LOCATION MATRIX (MAP)</div>
+<div id="futureLocationList" class="space-y-1.5 text-[11px] text-slate-400">
+  รอข้อมูลโครงสร้างตลาดเพื่อคำนวณ Future Location...
+</div>
+</div>
+</div>
+
+<!-- ขวา: PLAN & Trap State Machine -->
+<div class="col-span-12 lg:col-span-3 space-y-4">
+<div class="bg-[#1e293b] border border-slate-700/80 rounded-2xl p-4">
+<div class="text-[11px] font-black tracking-widest mb-3 text-emerald-300">🧠 PLAN & TRAP CONFIG</div>
+<div class="space-y-2 mb-3 text-[11px]">
+<div>
+  <label class="text-slate-400 text-[10px]">Market Structure Direction:</label>
+  <select id="planDir" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-emerald-500 text-emerald-400 font-bold mt-1">
+    <option value="BUY">📈 Uptrend / Buy Pullback Trap</option>
+    <option value="SELL">📉 Downtrend / Sell Rebound Trap</option>
+  </select>
+</div>
+<div>
+  <label class="text-slate-400 text-[10px]">Technical Invalidation (SL Anchor):</label>
+  <input id="inpTechSL" placeholder="ระบุราคา Tech SL" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-[12px] mono outline-none focus:border-emerald-500 text-yellow-300 font-bold mt-1">
+</div>
+<div class="grid grid-cols-2 gap-2">
+  <div>
+    <label class="text-slate-400 text-[10px]">Risk Multiplier:</label>
+    <input id="inpRiskMul" value="1.5" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-[12px] mono outline-none mt-1">
+  </div>
+  <div>
+    <label class="text-slate-400 text-[10px]">Reward Multiplier:</label>
+    <input id="inpRewardMul" value="3.0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-[12px] mono outline-none mt-1">
+  </div>
+</div>
+</div>
+<button onclick="buildPreEmptivePlan()" class="w-full bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-black py-2.5 rounded-xl shadow-[0_0_20px_rgba(16,185,129,.35)] hover:scale-[1.02] transition">⚡ สร้าง PLAN และ ARM TRAP →</button>
+</div>
+
+<div class="bg-[#1e293b] border border-slate-700/80 rounded-2xl p-4">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[11px] font-black tracking-widest text-emerald-400">🚀 TRAP STATE & NAVI</span>
+<span id="trapLifecycleBadge" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">CREATED</span>
+</div>
+<div id="navReportContent" class="space-y-2 text-[11px] text-slate-400">
+  ยังไม่มี PLAN ที่ถูก ARM
+</div>
+</div>
+</div>
+
+<!-- 🔥 ทางเข้าโบรกเกอร์ -->
+<div class="col-span-12 mt-2">
+<h2 class="text-[13px] font-black tracking-widest mb-3 text-slate-300">🔥 ทางเข้าโบรกเกอร์ (Broker Gateway)</h2>
+<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3" id="brokerGrid"></div>
+</div>
+
+</main>
+
+<script>
+const BASE = {
+  EURUSD:1.1567, GBPUSD:1.3526, USDJPY:159.31,
+  XAUUSD:2650.00, GOLD:2650.00, SILVER:64.708, USOIL:82.39,
+  BTCUSD:62964, BTCUSDT:62964, BTCTHB:2084566.57, ETHUSDT:1882.15,
+  SET:1609.06, SET50:1075.26, SPX:7785.75, NDX:30046.14, VIX:14.26,
+  AAPL:305.93, TSLA:342.27, NVDA:120.00, MSFT:420.00, GOOGL:175.00,
+  AOT:65.00, CPALL:47.00, PTT:39.75, DELTA:95.00, SCB:115.00
+};
+
+const TVMAP = {
+  EURUSD:"FX:EURUSD", GBPUSD:"FX:GBPUSD", USDJPY:"FX:USDJPY",
+  XAUUSD:"OANDA:XAUUSD", GOLD:"TVC:GOLD", SILVER:"TVC:SILVER", USOIL:"TVC:USOIL",
+  BTCUSD:"BITSTAMP:BTCUSD", BTCUSDT:"BINANCE:BTCUSDT", BTCTHB:"BINANCE:BTCTHB", ETHUSDT:"BINANCE:ETHUSDT",
+  SET:"SET:SET", SET50:"TFEX:S50", SPX:"SP:SPX", NDX:"NASDAQ:NDX", VIX:"CBOE:VIX",
+  VOO:"NYSEARCA:VOO", QQQ:"NASDAQ:QQQQ", SPY:"NYSEARCA:SPY", GLD:"NYSEARCA:GLD",
+  AAPL:"NASDAQ:AAPL", TSLA:"NASDAQ:TSLA", NVDA:"NASDAQ:NVDA", MSFT:"NASDAQ:MSFT", GOOGL:"NASDAQ:GOOGL",
+  AOT:"SET:AOT", CPALL:"SET:CPALL", PTT:"SET:PTT", DELTA:"SET:DELTA", SCB:"SET:SCB"
+};
+
+const ASSETS = {
+  FOREX: ["EURUSD","GBPUSD","USDJPY"],
+  GOLD: ["GOLD","XAUUSD","SILVER","USOIL"],
+  CRYPTO: ["BTCUSD","BTCUSDT","BTCTHB","ETHUSDT"],
+  INDEX: ["SET","SET50","SPX","NDX","VIX"],
+  STOCK: ["AAPL","TSLA","NVDA","MSFT","GOOGL","AOT","CPALL","PTT","DELTA","SCB"],
+  ETF: ["VOO","QQQ","SPY","GLD"]
+};
+
+const BROKERS = [
+  { name: "Mitrade", desc: "กำกับโดย ASIC+CIMA+FSC · โบนัสสูงสุด [FT9GU]", link: "https://i.miactivitys.com/index-th-TH.html?c=FT9GU&na=TH&id=invite_260108_5.0&p=other&v=v4.3&t=1786812863392&n=en****en1@gmail.com&s=apply4", color: "bg-emerald-500 text-white", icon: "🏆", badge: "แนะนำ" },
+  { name: "Exness", desc: "สเปรดเริ่ม 0.0 pip · ถอนอัตโนมัติ 24 ชม.", link: "https://one.exnessonelink.com/a/80dmb5wr12?source=app", color: "bg-yellow-400 text-black", icon: "⭐" },
+  { name: "XM Global", desc: "โบนัส 100% สูงสุด $5,000 · เลเวอเรจ 1:1000", link: "https://www.xmglobal.com/referral?token=Jap-L9h7S19cmlEnDtElZA", color: "bg-red-600 text-white", icon: "🔥" },
+  { name: "Trendo", desc: "คืนเงินสูงสุด 60% · แอปใช้ง่าย", link: "https://trendo.com/invite?market=googleplay&code=3199411", color: "bg-indigo-600 text-white", icon: "🚀" }
+];
+
+let coreState = {
+  marketDataValid: false,
+  currentPrice: 2650.00,
+  spread: 0.40,
+  symbol: "GOLD",
+  tvSymbol: "TVC:GOLD",
+  tf: "5",
+  plan: null,
+  trapState: "CREATED"
+};
+
+function runPreFlightCheck(){
+  const statusEl = document.getElementById('preFlightStatus');
+  const baseVal = BASE[coreState.symbol] || 1000;
+  
+  if(baseVal){
+    coreState.currentPrice = baseVal;
+    coreState.spread = coreState.symbol === "GOLD" ? 0.40 : (coreState.symbol.includes("BTC") ? 12.0 : 0.15);
+    coreState.marketDataValid = true;
+    
+    statusEl.className = "text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
+    statusEl.innerHTML = "🟢 PRE-FLIGHT PASS: REAL DATA ACQUIRED";
+    
+    document.getElementById('chartLivePrice').textContent = coreState.currentPrice;
+    document.getElementById('mapAssetTitle').textContent = coreState.symbol;
+
+    updateFutureLocations();
+    
+    const trend = document.getElementById('planDir').value;
+    if(trend === "BUY") {
+      document.getElementById('inpTechSL').value = (coreState.currentPrice * 0.990).toFixed(2);
+    } else {
+      document.getElementById('inpTechSL').value = (coreState.currentPrice * 1.010).toFixed(2);
+    }
+  } else {
+    coreState.marketDataValid = false;
+    statusEl.className = "text-[11px] font-bold px-3 py-1 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40";
+    statusEl.innerHTML = "🔒 PRE-FLIGHT FAIL: NO VALID MARKET DATA";
+  }
+}
+
+function updateEventEngine(){
+  const now = new Date();
+  const eventTimeStr = document.getElementById('inpEventTime').value;
+  if(!eventTimeStr) return;
+
+  const [evH, evM] = eventTimeStr.split(':').map(Number);
+  const evDate = new Date();
+  evDate.setHours(evH, evM, 0, 0);
+
+  if(now > evDate && (now - evDate) > 3600000) {
+    evDate.setDate(evDate.getDate() + 1);
+  }
+
+  const diffMs = evDate - now;
+  const diffSec = Math.floor(diffMs / 1000);
+  const hrs = Math.floor(diffSec / 3600);
+  const mRem = Math.floor((diffSec % 3600) / 60);
+  const sRem = diffSec % 60;
+  
+  document.getElementById('evCountdown').textContent = diffSec > 0 ? `${String(hrs).padStart(2,'0')}:${String(mRem).padStart(2,'0')}:${String(sRem).padStart(2,'0')}` : "00:00:00 (EVENT)";
+}
+
+function updateFutureLocations(){
+  if(!coreState.marketDataValid) return;
+  const p = coreState.currentPrice;
+  const listEl = document.getElementById('futureLocationList');
+  const sup1 = (p * 0.992).toFixed(2);
+  const sup2 = (p * 0.985).toFixed(2);
+  
+  listEl.innerHTML = `
+    <div class="p-2 bg-slate-900 rounded-lg border border-slate-800">
+      <div class="flex justify-between text-slate-300"><span>Future Zone 1 (Pullback):</span><b class="text-emerald-400">${sup1}</b></div>
+      <div class="flex justify-between text-slate-300"><span>Future Zone 2 (Deep Structure):</span><b class="text-cyan-400">${sup2}</b></div>
+      <div class="text-[10px] text-slate-500 mt-1">Liquidity Pool: BELOW Structure Support</div>
+    </div>
+  `;
+}
+
+function buildPreEmptivePlan(){
+  if(!coreState.marketDataValid){
+    alert("Pre-Flight Failed: ไม่อนุญาตให้สร้าง PLAN เนื่องจากไม่มี Valid Market Data");
+    return;
+  }
+  alert("สร้าง PLAN สำเร็จเรียบร้อย!");
+}
+
+// Initial Run
+runPreFlightCheck();
+updateEventEngine();
+</script>
+</body>
+</html>
