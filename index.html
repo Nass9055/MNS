@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>MNS Trade Navigator V4.0 — MAP & PLAN Report Hub</title>
+
+<meta
+  name="description"
+  content="MNS Trade Navigator V4.0 — MAP & PLAN Architecture Report Hub"
+>
+
+<style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, #111827 0%, #030712 48%);
+  color: #f8fafc;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.container {
+  width: min(1100px, 100%);
+  margin: auto;
+}
+
+/* =========================
+   HEADER
+========================= */
+
+.header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.logo {
+  color: #fbbf24;
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.subtitle {
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 17px;
+}
+
+/* =========================
+   STATUS
+========================= */
+
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #111827;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.badge.gold {
+  color: #fbbf24;
+  border-color: #fbbf24;
+  background: rgba(251,191,36,.10);
+}
+
+.badge.green {
+  color: #34d399;
+  border-color: #10b981;
+  background: rgba(16,185,129,.10);
+}
+
+/* =========================
+   PANEL & SECTIONS
+========================= */
+
+.panel {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 22px;
+  padding: 24px;
+  margin-bottom: 22px;
+}
+
+.panel-title {
+  color: #38bdf8;
+  font-size: 19px;
+  font-weight: 800;
+  margin-bottom: 18px;
+}
+
+.engine-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.engine {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 17px;
+  padding: 20px;
+}
+
+.engine-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.engine-name {
+  color: #fbbf24;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.engine-status {
+  font-size: 11px;
+  font-weight: 800;
+  color: #34d399;
+}
+
+.engine-desc {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* =========================
+   TABLE / REPORT STYLING
+========================= */
+
+.table-container {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+th, td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #334155;
+}
+
+th {
+  color: #38bdf8;
+  font-weight: 800;
+  background: #111827;
+}
+
+td {
+  color: #cbd5e1;
+}
+
+.state-pill {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: monospace;
+}
+
+.state-armed {
+  background: rgba(251,191,36,.15);
+  color: #fbbf24;
+  border: 1px solid #fbbf24;
+}
+
+.state-active {
+  background: rgba(16,185,129,.15);
+  color: #34d399;
+  border: 1px solid #10b981;
+}
+
+.state-missed {
+  background: rgba(239,68,68,.15);
+  color: #f87171;
+  border: 1px solid #ef4444;
+}
+
+/* =========================
+   RULE BOX
+========================= */
+
+.rule-box {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 15px;
+  background: rgba(127,29,29,.15);
+  border: 1px solid rgba(248,113,113,.35);
+}
+
+.rule-box strong {
+  color: #f87171;
+}
+
+.rule-box p {
+  margin-top: 7px;
+  color: #cbd5e1;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+/* =========================
+   NAVIGATION BUTTONS
+========================= */
+
+.nav-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.nav-card {
+  display: block;
+  text-decoration: none;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 17px;
+  padding: 21px;
+  transition: .25s ease;
+  text-align: center;
+}
+
+.nav-card:hover {
+  transform: translateY(-3px);
+  border-color: #fbbf24;
+  box-shadow: 0 0 22px rgba(251,191,36,.15);
+}
+
+.nav-title {
+  color: #fbbf24;
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 7px;
+}
+
+.nav-desc {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* =========================
+   FOOTER
+========================= */
+
+.footer {
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+  margin-top: 28px;
+  padding-bottom: 10px;
+}
+
+@media (max-width: 800px) {
+  .engine-grid, .nav-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo">MNS TRADE NAVIGATOR V4.0</div>
+    <div class="subtitle">MAP & PLAN Architecture Report Hub</div>
+
+    <div class="status-row">
+      <span class="badge gold">MNS V4.0 REPORT</span>
+      <span class="badge green">● DATA SYNCED</span>
+      <span class="badge">XAU/USD ISOLATED</span>
+    </div>
+  </header>
+
+  <!-- MAP ENGINE STATUS (Single Market Picture) -->
+  <section class="panel">
+    <div class="panel-title">🗺️ MAP Engine — Single Market Picture</div>
+    <div class="engine-grid">
+      <div class="engine">
+        <div class="engine-head">
+          <div class="engine-name">Structure & Liquidity</div>
+          <div class="engine-status">VALIDATED</div>
+        </div>
+        <div class="engine-desc">วิเคราะห์โครงสร้างตลาดและสภาพคล่องสด ไม่ใช้ Indicator เป็นแกนกลาง ห้ามสร้าง Order Plan ในหน้านี้</div>
+      </div>
+      <div class="engine">
+        <div class="engine-head">
+          <div class="engine-name">Future Locations</div>
+          <div class="engine-status">READY FOR PLAN</div>
+        </div>
+        <div class="engine-desc">ส่งมอบพิกัด Future Locations ให้ระบบ PLAN นำไปสร้างแผนล่วงหน้าตามหลัก Pre-Emptive</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAN & TRAP ARM REPORT -->
+  <section class="panel" id="plans">
+    <div class="panel-title">🎯 PLAN & Trap ARM Execution Report</div>
+    
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Plan ID</th>
+            <th>Future Location</th>
+            <th>Trap Type</th>
+            <th>Spread (Pips)</th>
+            <th>Execution SL</th>
+            <th>State</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>PL-XAU-01</b></td>
+            <td>2650.50 (Support Zone)</td>
+            <td>Pullback Trap</td>
+            <td>0.22</td>
+            <td>2645.80 (Auto-Calc)</td>
+            <td><span class="state-pill state-armed">ARMED</span></td>
+          </tr>
+          <tr>
+            <td><b>PL-XAU-02</b></td>
+            <td>2685.00 (Resistance Zone)</td>
+            <td>Event Trap</td>
+            <td>0.18</td>
+            <td>2690.20 (Auto-Calc)</td>
+            <td><span class="state-pill state-active">ACTIVE</span></td>
+          </tr>
+          <tr>
+            <td><b>PL-XAU-03</b></td>
+            <td>2630.00 (Sweep Level)</td>
+            <td>Time Trap</td>
+            <td>0.30</td>
+            <td>2624.50 (Auto-Calc)</td>
+            <td><span class="state-pill state-missed">MISSED</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rule-box">
+      <strong>MNS RULE 13.3 — PRE-EMPTIVE TRAP POLICY</strong>
+      <p>หากราคามาถึง Entry ก่อนที่ PLAN จะถูก ARM สถานะจะเปลี่ยนเป็น MISSED ทันที และไม่อนุญาตให้สร้าง Trap ย้อนหลังเพื่อไล่ตามราคา</p>
+    </div>
+  </section>
+
+  <!-- NAVIGATION CONTROL -->
+  <section class="panel">
+    <div class="panel-title">🧭 System Navigation</div>
+    <div class="nav-grid">
+      <a href="index.html" class="nav-card">
+        <div class="nav-title">🏠 Master Control Center (Hub)</div>
+        <div class="nav-desc">กลับสู่หน้าควบคุมหลัก ระบบ Pre-Flight และภาพรวมสถาปัตยกรรม V4.0</div>
+      </a>
+      <a href="https://nass9055.github.io/Trade-Navigator-/" target="_blank" rel="noopener noreferrer" class="nav-card">
+        <div class="nav-title">⚙️ NAVI Execution Engine</div>
+        <div class="nav-desc">เปิดระบบตรวจสอบ จัดอันดับ และส่งคำสั่งซื้อขายจริงตามเส้นทางที่กำหนด</div>
+      </a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    MNS Trade Navigator V4.0 • Isolated Pipeline Report Hub
+  </footer>
+
+</div>
+
+</body>
+  </html>
+                                                        
