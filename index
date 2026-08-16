@@ -1,0 +1,320 @@
+// ============================================================
+// 🧭 MNS — MARKET NAVIGATION SYSTEM (Single File for GitHub)
+// เชื่อมต่อครบวงจร: MAP → PLAN → NAVI (ภาพรวม + TOP3 + ติดตาม)
+// ============================================================
+
+const CONFIG = {
+  DECIMALS: 2,
+  SPREAD_MULTIPLIER: 2,
+  OFFSET_PCT: 0.004,
+  MIN_RR: 2.5,
+  CONSENSUS_THRESHOLD: 70,
+  MIN_CONFIDENCE: 55,
+  TOP_N_PLANS: 3,
+  MIN_PLAN_SCORE: 50,
+  NAVI_WEIGHTS: {
+    MARKET_ALIGNMENT: 0.30,
+    CONFIDENCE: 0.25,
+    RISK_REWARD: 0.25,
+    TIMELINESS: 0.20
+  },
+  STATUS: { 
+    ARMED: 'ARMED', 
+    ACTIVE: 'ACTIVE', 
+    TRIGGERED: 'TRIGGERED', 
+    INVALID: 'INVALID', 
+    MISSED: 'MISSED', 
+    EXPIRED: 'EXPIRED' 
+  }
+};
+
+// ============================================================
+// 🗺️ ส่วนที่ 1: MAP — รวมทุกมิติของตลาด
+// ============================================================
+class MNS_Map {
+  constructor(assetData, multiTF, structure, zones, momentum, news, cycle, levels) {
+    this.midPrice = assetData.mid;
+    this.spread = assetData.spread;
+    this.decimals = assetData.decimals;
+    this.multiTF = multiTF;
+    this.structure = structure;
+    this.zones = zones;
+    this.momentum = momentum;
+    this.news = news;
+    this.cycle = cycle;
+    this.levels = levels;
+    this.qualityScore = 0;
+  }
+
+  calculateQuality() {
+    const tfAlign = this.calcTFAlignment();
+    const structureScore = this.structure.swingLowConfirmed || this.structure.swingHighConfirmed ? 75 : 50;
+    const rng = this.zones.resistance - this.zones.support;
+    const zoneBalance = rng > 0 ? Math.round((1 - Math.abs((this.midPrice - this.zones.support) / rng - 0.5)) * 100) : 50;
+    const newsScore = !this.news?.hasHighImpact ? 95 : Math.max(40, 100 - this.news.minutesToNext / 4);
+    this.qualityScore = Math.round(tfAlign * 0.35 + structureScore * 0.20 + zoneBalance * 0.15 + this.momentum.strength * 0.15 + newsScore * 0.15);
+    return this.qualityScore;
+  }
+
+  calcTFAlignment() {
+    let up = 0, down = 0, w = { '4H': 3, '1H': 2, '15M': 1.5, '5M': 1 };
+    this.multiTF.forEach(tf => {
+      const wt = w[tf.name] || 1;
+      if (tf.direction === 'UP') up += wt; else if (tf.direction === 'DOWN') down += wt;
+    });
+    const total = up + down; 
+    return total ? Math.round(Math.max(up, down) / total * 100) : 50;
+  }
+
+  getDirectionAndRoute() {
+    let upV = 0, downV = 0, align = this.calcTFAlignment();
+    if (align >= CONFIG.CONSENSUS_THRESHOLD) {
+      const dom = this.multiTF.reduce((a, tf) => {
+        const wt = { '4H': 3, '1H': 2, '15M': 1.5, '5M': 1 }[tf.name] || 1;
+        return tf.direction === 'UP' ? a + wt : tf.direction === 'DOWN' ? a - wt : a;
+      }, 0);
+      upV = dom > 0 ? align : 50; 
+      downV = dom < 0 ? align : 50;
+    }
+    if (this.structure.swingLowConfirmed) upV += 15;
+    if (this.structure.swingHighConfirmed) downV += 15;
+    const total = upV + downV;
+    const confidence = total ? Math.round(Math.max(upV, downV) / total * 100) : 50;
+    const primary = confidence >= CONFIG.MIN_CONFIDENCE ? (upV > downV ? 'UP' : 'DOWN') : 'NEUTRAL';
+    const route = primary === 'UP' ? { path: ['ทะลุ→ทดสอบโซนส่ง'], target: this.zones.resistance } :
+                  primary === 'DOWN' ? { path: ['ทะลุ→ทดสอบโซนรับ'], target: this.zones.support } : { path: ['แกว่งในกรอบ'], target: null };
+    return { primary, confidence, route };
+  }
+}
+
+// ============================================================
+// 📋 ส่วนที่ 2: PLAN — สร้างทุกแผนจากทุกความเป็นไปได้
+// ============================================================
+class MNS_PlanEngine {
+  constructor(map, direction, route) {
+    this.map = map; 
+    this.dir = direction; 
+    this.route = route; 
+    this.plans = [];
+  }
+
+  buildAllPlans() {
+    this.plans = [];
+    if (this.dir.confidence >= CONFIG.MIN_CONFIDENCE) this.createPrimaryPlans();
+    this.createAlternativePlans(); 
+    this.createWaitPlans();
+    if (this.map.news?.hasHighImpact) this.createEventPlans();
+    return this.plans;
+  }
+
+  calcFromInvalidation(invalidation, dir) {
+    const spr2 = CONFIG.SPREAD_MULTIPLIER * this.map.spread;
+    const execSL = dir === 'BUY' ? invalidation - spr2 : invalidation + spr2;
+    const entry = dir === 'BUY' ? execSL + this.map.midPrice * CONFIG.OFFSET_PCT : execSL - this.map.midPrice * CONFIG.OFFSET_PCT;
+    const risk = Math.abs(entry - execSL);
+    const tp = dir === 'BUY' ? entry + risk * CONFIG.MIN_RR : entry - risk * CONFIG.MIN_RR;
+    const rr = risk ? +(Math.abs(tp - entry) / risk).toFixed(2) : 0;
+    const distPct = Math.abs(this.map.midPrice - entry) / this.map.midPrice * 100;
+    return { 
+      invalidationPoint: invalidation, 
+      technicalSL: +invalidation.toFixed(this.map.decimals),
+      executionSL: +execSL.toFixed(this.map.decimals), 
+      entry: +entry.toFixed(this.map.decimals),
+      tp: +tp.toFixed(this.map.decimals), 
+      rr, 
+      distancePct: +distPct.toFixed(2), 
+      confidence: this.dir.confidence 
+    };
+  }
+
+  createPrimaryPlans() {
+    if (this.dir.primary === 'UP') {
+      const p = this.calcFromInvalidation(this.map.zones.support, 'BUY');
+      p.name = '✅ แผนหลัก ตามเส้นทางขึ้น'; p.type = 'PRIMARY'; p.direction = 'BUY';
+      p.logic = `สอดคล้องทุก TF · เป้า ${this.map.zones.resistance}`; p.routeNote = this.route.path[0];
+      this.plans.push(p);
+    } else {
+      const p = this.calcFromInvalidation(this.map.zones.resistance, 'SELL');
+      p.name = '✅ แผนหลัก ตามเส้นทางลง'; p.type = 'PRIMARY'; p.direction = 'SELL';
+      p.logic = `สอดคล้องทุก TF · เป้า ${this.map.zones.support}`; p.routeNote = this.route.path[0];
+      this.plans.push(p);
+    }
+  }
+
+  createAlternativePlans() {
+    const altDir = this.dir.primary === 'UP' ? 'DOWN' : 'UP';
+    if (altDir === 'DOWN') {
+      const p = this.calcFromInvalidation(this.map.zones.resistance, 'SELL');
+      p.name = '🔄 แผนสำรอง ถ้าผลักกลับลง'; p.type = 'ALTERNATIVE'; p.direction = 'SELL';
+      p.logic = 'ถ้าเส้นทางขัดข้อง · เปลี่ยนทางลง'; p.note = 'ใช้เมื่อเส้นทางหลักผิด';
+      this.plans.push(p);
+    } else {
+      const p = this.calcFromInvalidation(this.map.zones.support, 'BUY');
+      p.name = '🔄 แผนสำรอง ถ้าผลักกลับขึ้น'; p.type = 'ALTERNATIVE'; p.direction = 'BUY';
+      p.logic = 'ถ้าเส้นทางขัดข้อง · เปลี่ยนทางขึ้น'; p.note = 'ใช้เมื่อเส้นทางหลักผิด';
+      this.plans.push(p);
+    }
+  }
+
+  createWaitPlans() {
+    const buy = this.calcFromInvalidation(this.map.zones.support, 'BUY');
+    buy.name = '⏳ แผนรอซื้อที่โซนรับ'; buy.type = 'WAIT'; buy.direction = 'BUY';
+    buy.logic = 'รอยืนยันที่โซนรับ · ปลอดภัยสูง'; this.plans.push(buy);
+    const sell = this.calcFromInvalidation(this.map.zones.resistance, 'SELL');
+    sell.name = '⏳ แผนรอขายที่โซนส่ง'; sell.type = 'WAIT'; sell.direction = 'SELL';
+    sell.logic = 'รอยืนยันที่โซนส่ง · ปลอดภัยสูง'; this.plans.push(sell);
+  }
+
+  createEventPlans() {
+    const mins = this.map.news.minutesToNext;
+    const buy = this.calcFromInvalidation(this.map.zones.support, 'BUY');
+    buy.name = '⚡ แผนรับข่าว BUY'; buy.type = 'EVENT'; buy.direction = 'BUY';
+    buy.logic = `ข่าวในอีก ${Math.floor(mins / 60)}ชม · เตรียมรอ`; buy.note = 'รอสัญญาณจากข่าว'; this.plans.push(buy);
+    const sell = this.calcFromInvalidation(this.map.zones.resistance, 'SELL');
+    sell.name = '⚡ แผนรับข่าว SELL'; sell.type = 'EVENT'; sell.direction = 'SELL';
+    sell.logic = `ข่าวในอีก ${Math.floor(mins / 60)}ชม · เตรียมรอ`; sell.note = 'รอสัญญาณจากข่าว'; this.plans.push(sell);
+  }
+}
+
+// ============================================================
+// 🧭 ส่วนที่ 3: NAVI — อ่านภาพรวม · เลือก TOP3 · ติดตาม
+// ============================================================
+class MNS_NaviEngine {
+  constructor(fullMap, listOfPlans) {
+    this.map = fullMap; 
+    this.allPlans = listOfPlans; 
+    this.topPlans = []; 
+    this.monitorLog = [];
+    this.marketView = null; 
+    this.currentTime = Date.now();
+  }
+
+  readWideMarketView() {
+    const { qualityScore, multiTF, momentum, news, zones, midPrice } = this.map;
+    let up = 0, down = 0; 
+    multiTF.forEach(tf => { if (tf.direction === 'UP') up++; else if (tf.direction === 'DOWN') down++; });
+    const total = up + down; 
+    const tfAgree = total ? Math.round(Math.max(up, down) / total * 100) : 50;
+    const marketState = qualityScore >= 75 ? 'STRONG_BIAS' : qualityScore >= 60 ? 'MODERATE_BIAS' : qualityScore >= 45 ? 'UNCERTAIN' : 'RISKY';
+    const urgency = news?.hasHighImpact ? 'HIGH' : momentum?.strength >= 70 ? 'MEDIUM' : 'LOW';
+    const rng = zones.resistance - zones.support;
+    const posInRange = rng > 0 ? Math.round(((midPrice - zones.support) / rng) * 100) : 50;
+    const level = tfAgree >= 75 ? 'สอดคล้องสูง' : tfAgree >= 60 ? 'สอดคล้องปานกลาง' : 'ขาดความสอดคล้อง';
+    const timeNote = urgency === 'HIGH' ? '⚠️ มีเหตุการณ์ใกล้' : urgency === 'MEDIUM' ? 'เร็วๆ นี้' : 'สภาพปกติ';
+    const desc = { 
+      STRONG_BIAS: '📈 แนวโน้มชัดเจนและแข็งแรง', 
+      MODERATE_BIAS: '📊 มีแนวโน้มแต่ยังไม่ชัดเจนทั้งหมด', 
+      UNCERTAIN: '🔄 ตลาดกำลังตัดสิน รอยืนยัน', 
+      RISKY: '⚠️ สภาพอ่อนแอ ระมัดระวัง' 
+    }[marketState];
+    return this.marketView = { qualityScore, marketState, tfAgree, urgency, positionInRange: posInRange, summary: `${desc} | ${level} | ${timeNote}` };
+  }
+
+  scorePlan(plan) {
+    const w = CONFIG.NAVI_WEIGHTS;
+    const dir = this.map.getDirectionAndRoute().primary;
+    const dirMatch = (dir === 'UP' && plan.direction === 'BUY') || (dir === 'DOWN' && plan.direction === 'SELL');
+    const alignScore = dirMatch ? this.marketView.tfAgree : Math.max(30, this.marketView.tfAgree - 35);
+    const rr = parseFloat(plan.rr) || 0;
+    const rrScore = rr >= 2.5 ? 100 : rr >= 2.0 ? 85 : rr >= 1.5 ? 70 : 45;
+    const dist = parseFloat(plan.distancePct) || 5;
+    const timeScore = dist <= 1.0 ? 100 : dist <= 2.0 ? 85 : dist <= 3.5 ? 70 : 50;
+    const total = alignScore * w.MARKET_ALIGNMENT + (plan.confidence || 50) * w.CONFIDENCE + rrScore * w.RISK_REWARD + timeScore * w.TIMELINESS;
+    return { ...plan, naviScore: Math.min(100, Math.round(total)) };
+  }
+
+  selectTopPlans() {
+    this.readWideMarketView();
+    this.topPlans = this.allPlans.map(p => this.scorePlan(p)).filter(p => p.naviScore >= CONFIG.MIN_PLAN_SCORE).sort((a, b) => b.naviScore - a.naviScore).slice(0, CONFIG.TOP_N_PLANS);
+    this.topPlans.forEach((p, i) => { 
+      p.rank = i + 1; 
+      p.status = p.distancePct <= 0.3 ? CONFIG.STATUS.ACTIVE : CONFIG.STATUS.ARMED; 
+      this.logChange(p, '', p.status); 
+    });
+    return this.topPlans;
+  }
+
+  monitorPlans(currentPrice) {
+    return this.topPlans.filter(p => !['INVALID', 'TRIGGERED', 'MISSED', 'EXPIRED'].includes(p.status)).map(p => {
+      const { entry, executionSL, direction } = p;
+      let newStatus = p.status;
+      if ((direction === 'BUY' && currentPrice < executionSL) || (direction === 'SELL' && currentPrice > executionSL)) {
+        newStatus = CONFIG.STATUS.INVALID;
+      } else if ((direction === 'BUY' && currentPrice <= entry * 1.001) || (direction === 'SELL' && currentPrice >= entry * 0.999)) {
+        newStatus = CONFIG.STATUS.TRIGGERED;
+      }
+      const dist = Math.abs(currentPrice - entry) / currentPrice * 100;
+      if (newStatus === p.status && dist <= 0.5) newStatus = CONFIG.STATUS.ACTIVE;
+      if (newStatus !== p.status) { 
+        this.logChange(p, p.status, newStatus); 
+        p.status = newStatus; 
+      }
+      return { plan: p.rank, status: p.status };
+    });
+  }
+
+  logChange(p, f, t) { 
+    this.monitorLog.push({ time: new Date().toLocaleTimeString('th-TH'), plan: p.rank, from: f, to: t }); 
+  }
+
+  statusNote(s) { 
+    return { ARMED: '✅ พร้อมดัก', ACTIVE: '👁️ ใกล้แล้ว', TRIGGERED: '🚀 เริ่มแล้ว', INVALID: '⛔ ผิดทาง ยกเลิก' }[s] || '—'; 
+  }
+
+  generateReport() {
+    if (!this.topPlans.length) this.selectTopPlans();
+    const v = this.marketView;
+    let r = '━━━━━━━━━━━━━━━━ 🧭 MNS NAVI REPORT ━━━━━━━━━━━━━━━━\n';
+    r += `🗺️ สภาพตลาด: ${v.summary}\n📊 คุณภาพ: ${v.qualityScore}% | ตำแหน่ง: ${v.positionInRange}%\n`;
+    r += '━━━━━━━━━━━━━━ 🏅 3 แผนดีที่สุด ━━━━━━━━━━━━━━━\n';
+    this.topPlans.forEach(p => {
+      const em = p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : '🥉';
+      r += `${em} อันดับ${p.rank} [คะแนน ${p.naviScore}/100]\nชื่อ: ${p.name}\nทิศทาง: ${p.direction}\n🛡️ SL: ${p.executionSL}\n⚓ Entry: ${p.entry}\n🎯 TP: ${p.tp}\n⚖️ R:R: ${p.rr}\n📏 ห่าง: ${p.distancePct}%\n🔄 สถานะ: ${p.status} → ${this.statusNote(p.status)}\n💡 เหตุผล: ${p.logic || p.note || ''}\n`;
+      r += '────────────────────────────\n';
+    });
+    if (this.monitorLog.length) { 
+      r += '🔄 ประวัติติดตาม:\n'; 
+      this.monitorLog.slice(-5).forEach(l => r += `${l.time} | แผน${l.plan} ${l.from}→${l.to}\n`); 
+    }
+    return r;
+  }
+}
+
+// ============================================================
+// 🚀 ส่วนที่ 4: Execution / Runner (ตัวอย่างการรันไฟล์เดียวจบ)
+// ============================================================
+function runMNS() {
+  // 1. สร้าง MAP
+  const map = new MNS_Map(
+    { mid: 2388.50, spread: 0.85, decimals: 2 },
+    [
+      { name: '4H', direction: 'UP', strength: 85 },
+      { name: '1H', direction: 'UP', strength: 78 },
+      { name: '15M', direction: 'UP', strength: 62 },
+      { name: '5M', direction: 'SIDEWAYS', strength: 50 }
+    ],
+    { swingLowConfirmed: true, swingHighConfirmed: false },
+    { support: 2375.40, resistance: 2402.60 },
+    { direction: 'UP', strength: 65 },
+    { hasHighImpact: false, minutesToNext: 500 },
+    { session: 'NORMAL', volatility: 'MEDIUM' }, 
+    { pivots: [2390, 2398, 2405] }
+  );
+
+  // 2. คำนวณคุณภาพ + ทิศทาง + เส้นทาง
+  map.calculateQuality();
+  const dir = map.getDirectionAndRoute();
+
+  // 3. PLAN สร้างทุกแผน
+  const planEngine = new MNS_PlanEngine(map, dir, dir.route);
+  const allPlans = planEngine.buildAllPlans();
+
+  // 4. NAVI อ่านภาพรวม → เลือก TOP3 → รายงาน
+  const navi = new MNS_NaviEngine(map, allPlans);
+  console.log(navi.generateReport());
+
+  return navi;
+}
+
+// ถ้าเรียกใช้งานผ่าน Node.js สามารถรันฟังก์ชันนี้ได้ทันที
+runMNS();
