@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNS — Market Navigation System</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://s3.tradingview.com/tv.js"></script>
+<style>
+body{font-family:Inter,system-ui;background:#020617;color:#e2e8f0}
+.mono{font-family:"JetBrains Mono",monospace}
+.glow-emerald{box-shadow:0 0 18px rgba(16,185,129,.45)}
+.glow-yellow{box-shadow:0 0 18px rgba(250,204,21,.45)}
+.glow-red{box-shadow:0 0 18px rgba(239,68,68,.45)}
+.glow-indigo{box-shadow:0 0 18px rgba(99,102,241,.45)}
+.panel{background:#1e293b;border:1px solid rgba(71,85,105,.8);border-radius:16px}
+.value{font-family:"JetBrains Mono",monospace;color:#fff}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:10px}
+</style>
+</head>
+
+<body class="bg-[radial-gradient(circle_at_1px_1px,rgba(16,185,129,0.07)_1px,transparent_0)] bg-[length:24px_24px]">
+
+<header class="sticky top-0 z-50 backdrop-blur-xl bg-slate-900/90 border-b border-slate-800">
+<div class="h-[2px] w-full bg-gradient-to-r from-emerald-400 via-yellow-400 to-indigo-500"></div>
+<div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+<div class="flex items-center gap-2.5">
+<span class="font-black text-[16px] tracking-widest text-emerald-400">MNS</span>
+<span class="text-[10px] font-black tracking-[0.2em] bg-black text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full">MARKET NAVIGATION SYSTEM v3.1</span>
+</div>
+<div class="flex flex-wrap gap-2.5">
+<a href="https://i.miactivitys.com/index-th-TH.html?c=FT9GU" target="_blank" class="glow-emerald bg-emerald-500 text-white font-bold text-[13px] px-4 py-2 rounded-full">Mitrade 🏆</a>
+<a href="https://one.exnessonelink.com/a/80dmb5wr12" target="_blank" class="glow-yellow bg-yellow-400 text-black font-bold text-[13px] px-4 py-2 rounded-full">Exness ⭐</a>
+<a href="https://www.xmglobal.com/referral?token=Jap-L9h7S19cmlEnDtElZA" target="_blank" class="glow-red bg-red-600 text-white font-bold text-[13px] px-4 py-2 rounded-full">XM 🔥</a>
+<a href="https://trendo.com/invite?market=googleplay&code=3199411" target="_blank" class="glow-indigo bg-indigo-600 text-white font-bold text-[13px] px-4 py-2 rounded-full">Trendo 🚀</a>
+</div>
+</div>
+</header>
+
+<main class="max-w-[1600px] mx-auto px-4 py-5 grid grid-cols-12 gap-4">
+
+<div class="col-span-12 lg:col-span-3 space-y-4">
+
+<div class="panel p-4">
+<input id="search" placeholder="ค้นหาสัญลักษณ์ เช่น GOLD, EURUSD..." oninput="renderAssets()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-[12px] mono mb-3 text-white">
+<div id="assetList" class="space-y-1 max-h-[280px] overflow-auto"></div>
+</div>
+
+<div class="panel p-4">
+<div class="text-[11px] font-black tracking-widest text-slate-300 mb-2">📰 ECONOMIC CALENDAR</div>
+<iframe src="https://s.tradingview.com/embed-widget/events/?locale=th_TH" style="width:100%;height:160px;border:0"></iframe>
+</div>
+
+<div class="panel p-4">
+<div class="text-[11px] font-black tracking-widest text-slate-300 mb-3">⚙️ SYSTEM PREFLIGHT</div>
+<div id="preflightContent" class="space-y-1.5 text-[10px] mono"></div>
+</div>
+
+</div>
+
+<div class="col-span-12 lg:col-span-6 space-y-4">
+
+<div class="panel p-2">
+<div id="tradingview_chart_container" class="h-[350px] sm:h-[420px] lg:h-[480px] w-full flex items-center justify-center text-slate-400 text-xs">⏳ กำลังโหลดกราฟ...</div>
+</div>
+
+<div class="panel p-4">
+<div class="text-[11px] font-black tracking-widest text-slate-300 mb-2 flex justify-between items-center">
+<span>📥 DATA ACQUISITION</span>
+<span id="streamStatus" class="text-[9px] text-emerald-400 mono">STREAM ACTIVE</span>
+</div>
+<div id="dataAcquisitionStream" class="space-y-1 max-h-[130px] overflow-auto text-[10px] mono text-slate-400 bg-slate-900 p-2.5 rounded-lg border border-slate-800"></div>
+</div>
+
+<div class="panel p-4">
+<div class="text-[11px] font-black tracking-widest text-slate-300 mb-2">🧭 MNS PIPELINE</div>
+<div class="grid grid-cols-6 gap-1 text-[9px] text-center">
+<div id="stagePreflight" class="bg-slate-800 rounded p-2">PRE<br>FLIGHT</div>
+<div id="stageMap" class="bg-slate-800 rounded p-2">MAP</div>
+<div id="stageFuture" class="bg-slate-800 rounded p-2">FUTURE<br>LOCATION</div>
+<div id="stagePlan" class="bg-slate-800 rounded p-2">PLAN</div>
+<div id="stageNavi" class="bg-slate-800 rounded p-2">NAVI</div>
+<div id="stageMonitor" class="bg-slate-800 rounded p-2">MONITOR</div>
+</div>
+</div>
+
+</div>
+
+<div class="col-span-12 lg:col-span-3 space-y-4">
+
+<div class="panel p-4">
+<button onclick="runPipeline()" class="w-full bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-black py-3 rounded-xl hover:scale-[1.02] transition shadow-lg cursor-pointer">
+รัน MNS ANALYSIS
+</button>
+</div>
+
+<div id="mapPanel" class="panel p-4 hidden">
+<div class="text-[11px] font-black tracking-widest text-cyan-400 mb-2 flex justify-between items-center">
+<span>🗺️ MAP</span>
+<span id="mapStatus" class="text-[9px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">READY</span>
+</div>
+<div id="mapContent" class="text-[10px] space-y-1.5"></div>
+</div>
+
+<div id="futurePanel" class="panel p-4 hidden">
+<div class="text-[11px] font-black tracking-widest text-cyan-300 mb-2">📍 FUTURE LOCATIONS</div>
+<div id="futureContent" class="space-y-2"></div>
+</div>
+
+<div id="planPanel" class="panel p-4 hidden">
+<div class="text-[11px] font-black tracking-widest text-indigo-400 mb-2">🎯 PLAN</div>
+<div id="planContent" class="space-y-2"></div>
+</div>
+
+<div id="naviPanel" class="panel p-4 hidden">
+<div class="text-[11px] font-black tracking-widest text-yellow-400 mb-2">🧭 NAVI TOP 3</div>
+<div id="naviContent" class="space-y-2"></div>
+</div>
+
+<div id="monitorPanel" class="panel p-4 hidden">
+<div class="text-[11px] font-black tracking-widest text-emerald-400 mb-2">👁️ LIVE MONITOR</div>
+<div id="monitorContent" class="space-y-1.5 text-[10px] mono"></div>
+</div>
+
+<div id="initialPrompt" class="panel p-4 text-center">
+<div class="text-[11px] font-bold text-slate-400">ระบบพร้อมทำงาน กด RUN MNS ANALYSIS เพื่อสร้าง MAP → PLAN → NAVI</div>
+</div>
+
+</div>
+</main>
+
+<script>
+const CONFIG={
+VERSION:"3.1.0",
+DECIMALS:2,
+MIN_RR:2.5,
+MIN_CONFIDENCE:55,
+CONSENSUS_THRESHOLD:70,
+TOP_N_PLANS:3,
+MIN_PLAN_SCORE:50,
+PLAN_EXPIRY_MINUTES:360,
+EVENT_ARM_MINUTES:60,
+STATUS:{
+ARMED:"ARMED",
+TRIGGERED:"TRIGGERED",
+WAIT_EXECUTION:"WAIT_EXECUTION",
+ACTIVE:"ACTIVE",
+MISSED:"MISSED",
+INVALIDATED:"INVALIDATED",
+EXPIRED:"EXPIRED"
+},
+TRAP:{
+PULLBACK:"PULLBACK_TRAP",
+EVENT:"EVENT_TRAP",
+TIME:"TIME_TRAP",
+DIRECT:"DIRECT_TRAP"
+},
+NAVI_WEIGHTS:{
+MARKET_ALIGNMENT:.25,
+CONFIDENCE:.20,
+RISK_REWARD:.25,
+TIMELINESS:.15,
+LOCATION_QUALITY:.15
+}
+};
+
+const TVMAP={
+"GOLD":{symbol:"TVC:GOLD",lastPrice:2385.50,atr:15.2,spread:.85},
+"SILVER":{symbol:"TVC:SILVER",lastPrice:28.40,atr:.45,spread:.04},
+"USOIL":{symbol:"TVC:USOIL",lastPrice:78.50,atr:1.2,spread:.04},
+"BRENT":{symbol:"TVC:UKOIL",lastPrice:82.30,atr:1.3,spread:.04},
+"BTCUSD":{symbol:"BITSTAMP:BTCUSD",lastPrice:64200,atr:1200,spread:15},
+"ETHUSD":{symbol:"BITSTAMP:ETHUSD",lastPrice:3500,atr:90,spread:1.5},
+"SOLUSD":{symbol:"BINANCE:SOLUSDT",lastPrice:145.20,atr:5.5,spread:.08},
+"EURUSD":{symbol:"FX:EURUSD",lastPrice:1.0850,atr:.0045,spread:.00012},
+"GBPUSD":{symbol:"FX:GBPUSD",lastPrice:1.2920,atr:.0055,spread:.00015},
+"USDJPY":{symbol:"FX:USDJPY",lastPrice:155.40,atr:.85,spread:.015},
+"AUDUSD":{symbol:"FX:AUDUSD",lastPrice:.6720,atr:.0040,spread:.00012},
+"USDCAD":{symbol:"FX:USDCAD",lastPrice:1.3650,atr:.0050,spread:.00015},
+"NZDUSD":{symbol:"FX:NZDUSD",lastPrice:.6050,atr:.0038,spread:.00012},
+"EURJPY":{symbol:"FX:EURJPY",lastPrice:168.60,atr:.95,spread:.02},
+"GBPJPY":{symbol:"FX:GBPJPY",lastPrice:200.80,atr:1.10,spread:.025},
+"S&P500":{symbol:"FOREXCOM:SPXUSD",lastPrice:5550,atr:45,spread:.5},
+"NASDAQ":{symbol:"FOREXCOM:NSXUSD",lastPrice:19800,atr:180,spread:2},
+"DOWJONES":{symbol:"FOREXCOM:DJI",lastPrice:40200,atr:300,spread:3},
+"DAX":{symbol:"TVC:DAX",lastPrice:18400,atr:150,spread:2},
+"NIKKEI":{symbol:"TVC:NI225",lastPrice:39500,atr:350,spread:3}
+};
+
+const ASSETS=Object.keys(TVMAP);
+let currentSym="GOLD";
+let currentTF="5";
+let isWidgetLoading=false;
+let mnsRuntime=null;
+let monitorTimer=null;
+
+class Utils{
+static round(v,d=CONFIG.DECIMALS){return Number.isFinite(v)?Number(v.toFixed(d)):null}
+static clamp(v,min=0,max=100){return Math.max(min,Math.min(max,Number(v)||0))}
+static id(p="MNS"){return p+"-"+Date.now()+"-"+Math.random().toString(36).slice(2,7)}
+static minutesSince(t){return t?(Date.now()-t)/60000:Infinity}
+}
+
+class PreFlight{
+static run(packet){
+const checks=[
+{name:"SOURCE",pass:!!packet},
+{name:"FRESHNESS",pass:!!packet&&Date.now()-(packet.timestamp||0)<=300000},
+{name:"MARKET",pass:!!packet?.market&&Number.isFinite(packet.market.mid)},
+{name:"CONSISTENCY",pass:packet?.market?.bid<packet?.market?.ask},
+{name:"CONFLICT",pass:packet?.conflict!==true},
+{name:"VISION",pass:!!packet?.vision},
+{name:"SPREAD",pass:Number.isFinite(packet?.market?.spread)&&packet.market.spread>0&&packet.market.spread<=5}
+];
+return{passed:checks.every(x=>x.pass),checks}
+}
+}
+
+class MAP{
+constructor(packet){
+this.timestamp=packet.timestamp||Date.now();
+this.market=packet.market;
+this.multiTF=packet.multiTF||[];
+this.structure=packet.structure||{};
+this.liquidity=packet.liquidity||{};
+this.liquidityFlow=packet.liquidityFlow||{};
+this.location=packet.location||{};
+this.zones=packet.zones||{};
+this.range=packet.range||{};
+this.session=packet.session||{};
+this.event=packet.event||{};
+this.cycle=packet.cycle||{};
+this.priceBehavior=packet.priceBehavior||{};
+this.news=packet.news||{};
+this.futureLocations=[];
+this.qualityScore=0;
+this.direction="NEUTRAL";
+this.confidence=50;
+}
+
+getSpread(){return this.market.spread}
+
+timeframeAlignment(){
+const weights={"4H":3,"1H":2,"15M":1.5,"5M":1,"1M":.5};
+let up=0,down=0;
+this.multiTF.forEach(tf=>{
+const w=weights[tf.name]||1;
+if(tf.direction==="UP")up+=w;
+if(tf.direction==="DOWN")down+=w;
+});
+const total=up+down;
+return{
+direction:up>down?"UP":down>up?"DOWN":"NEUTRAL",
+score:total?Math.round(Math.max(up,down)/total*100):50,
+up,down
+}
+}
+
+calculateDirection(){
+const tf=this.timeframeAlignment();
+let up=tf.up;
+let down=tf.down;
+
+if(this.structure.swingLowConfirmed)up+=1.5;
+if(this.structure.swingHighConfirmed)down+=1.5;
+if(this.structure.higherHigh)up+=1;
+if(this.structure.lowerLow)down+=1;
+if(this.liquidityFlow.buySide)up+=1;
+if(this.liquidityFlow.sellSide)down+=1;
+
+const total=up+down;
+const confidence=total?Math.round(Math.max(up,down)/total*100):50;
+
+this.direction=confidence>=CONFIG.MIN_CONFIDENCE?(up>down?"UP":down>up?"DOWN":"NEUTRAL"):"NEUTRAL";
+this.confidence=confidence;
+
+return{
+primary:this.direction,
+confidence,
+route:this.direction==="UP"?"SUPPORT → BUY TRAP → RESISTANCE":this.direction==="DOWN"?"RESISTANCE → SELL TRAP → SUPPORT":"RANGE → DECISION"
+}
+}
+
+calculateQuality(){
+const tf=this.timeframeAlignment();
+const structure=this.structure.swingLowConfirmed||this.structure.swingHighConfirmed?80:50;
+const location=this.location.quality||60;
+const behavior=this.priceBehavior.quality||60;
+const liquidity=this.liquidity.quality||60;
+const event=this.event.hasHighImpact?70:90;
+
+this.qualityScore=Math.round(
+tf.score*.25+
+structure*.20+
+location*.20+
+behavior*.15+
+liquidity*.10+
+event*.10
+);
+
+return this.qualityScore
+}
+}
+
+class FutureLocationDetector{
+constructor(map){this.map=map}
+detect(){
+const locations=[];
+const support=this.map.zones.support;
+const resistance=this.map.zones.resistance;
+
+if(Number.isFinite(support)){
+locations.push({
+id:Utils.id("FL-BUY"),
+price:support,
+direction:"BUY",
+type:"LIQUIDITY_RETEST",
+role:"BUY_TRAP_LOCATION",
+source:"SUPPORT",
+quality:this.map.structure.swingLowConfirmed?88:68
+})
+}
+
+if(Number.isFinite(resistance)){
+locations.push({
+id:Utils.id("FL-SELL"),
+price:resistance,
+direction:"SELL",
+type:"LIQUIDITY_RETEST",
+role:"SELL_TRAP_LOCATION",
+source:"RESISTANCE",
+quality:this.map.structure.swingHighConfirmed?88:68
+})
+}
+
+this.map.futureLocations=locations;
+return locations
+}
+}
+
+class PLAN{
+constructor(map,direction){this.map=map;this.direction=direction;this.plans=[]}
+
+technicalSL(location,direction){
+const buffer=Math.max(
+this.map.getSpread(),
+this.map.range.buffer||this.map.market.mid*.001
+);
+return direction==="BUY"?location.price-buffer:location.price+buffer
+}
+
+buildTrap(location,direction,type){
+const technicalSL=this.technicalSL(location,direction);
+const spread=this.map.getSpread();
+
+const executionSL=direction==="BUY"
+?technicalSL-spread
+:technicalSL+spread;
+
+const entry=location.price;
+const risk=Math.abs(entry-executionSL);
+
+if(!risk)return null;
+
+const tp1=direction==="BUY"
+?entry+risk*1.5
+:entry-risk*1.5;
+
+const tp2=direction==="BUY"
+?entry+risk*CONFIG.MIN_RR
+:entry-risk*CONFIG.MIN_RR;
+
+return{
+id:Utils.id("PLAN"),
+name:type===CONFIG.TRAP.EVENT?`⚡ EVENT ${direction}`:`🪤 PULLBACK ${direction}`,
+type,
+direction,
+preemptive:true,
+location:{
+id:location.id,
+price:Utils.round(location.price),
+role:location.role,
+quality:location.quality
+},
+entry:Utils.round(entry),
+technicalSL:Utils.round(technicalSL),
+executionSL:Utils.round(executionSL),
+tp1:Utils.round(tp1),
+tp2:Utils.round(tp2),
+rr:CONFIG.MIN_RR,
+confidence:this.direction.confidence,
+trigger:{
+type:"LOCATION_CONFIRMATION",
+condition:direction==="BUY"?"ทดสอบโซนรับและเกิด BUY confirmation":"ทดสอบโซนส่งและเกิด SELL confirmation"
+},
+invalidation:Utils.round(technicalSL),
+state:CONFIG.STATUS.ARMED,
+armedAt:Date.now(),
+logic:"Future Location → Trap ARM → Trigger → Execution"
+}
+}
+
+build(){
+this.plans=[];
+
+for(const location of this.map.futureLocations){
+const p=this.buildTrap(location,location.direction,CONFIG.TRAP.PULLBACK);
+if(p)this.plans.push(p);
+}
+
+if(this.map.event.hasHighImpact&&this.map.event.minutesToNext<=CONFIG.EVENT_ARM_MINUTES){
+for(const location of this.map.futureLocations){
+const p=this.buildTrap(location,location.direction,CONFIG.TRAP.EVENT);
+if(p)this.plans.push(p);
+}
+}
+
+return this.plans
+}
+}
+
+class StateMachine{
+static evaluate(plan,currentPrice,triggerConfirmed=false,executionConfirmed=false){
+if(!plan)return null;
+
+if([CONFIG.STATUS.MISSED,CONFIG.STATUS.INVALIDATED,CONFIG.STATUS.EXPIRED].includes(plan.state))return plan.state;
+
+if(Utils.minutesSince(plan.armedAt)>CONFIG.PLAN_EXPIRY_MINUTES){
+plan.state=CONFIG.STATUS.EXPIRED;
+return plan.state
+}
+
+const invalidated=plan.direction==="BUY"
+?currentPrice<=plan.executionSL
+:currentPrice>=plan.executionSL;
+
+if(invalidated&&plan.state!==CONFIG.STATUS.ACTIVE){
+plan.state=CONFIG.STATUS.INVALIDATED;
+return plan.state
+}
+
+const reached=plan.direction==="BUY"
+?currentPrice<=plan.entry
+:currentPrice>=plan.entry;
+
+if(plan.state===CONFIG.STATUS.ARMED&&reached){
+plan.state=CONFIG.STATUS.TRIGGERED
+}
+
+if(plan.state===CONFIG.STATUS.TRIGGERED&&triggerConfirmed){
+plan.state=CONFIG.STATUS.WAIT_EXECUTION
+}
+
+if(plan.state===CONFIG.STATUS.WAIT_EXECUTION&&executionConfirmed){
+plan.state=CONFIG.STATUS.ACTIVE
+}
+
+return plan.state
+}
+}
+
+class NAVI{
+constructor(map,plans){
+this.map=map;
+this.plans=plans;
+this.topPlans=[];
+this.monitorLog=[];
+this.marketView=null
+}
+
+readMarketView(){
+const tf=this.map.timeframeAlignment();
+
+this.marketView={
+quality:this.map.qualityScore,
+direction:this.map.direction,
+confidence:this.map.confidence,
+tfAlignment:tf.score,
+eventRisk:this.map.event.hasHighImpact?"HIGH":"NORMAL"
+};
+
+return this.marketView
+}
+
+validate(plan){
+return plan.preemptive&&
+Number.isFinite(plan.entry)&&
+Number.isFinite(plan.executionSL)&&
+Number.isFinite(plan.tp2)&&
+plan.rr>=CONFIG.MIN_RR
+}
+
+score(plan){
+const w=CONFIG.NAVI_WEIGHTS;
+
+const aligned=
+(this.map.direction==="UP"&&plan.direction==="BUY")||
+(this.map.direction==="DOWN"&&plan.direction==="SELL");
+
+const marketAlignment=aligned
+?this.marketView.tfAlignment
+:Math.max(30,this.marketView.tfAlignment-30);
+
+const rrScore=plan.rr>=3?100:plan.rr>=2.5?95:85;
+
+const timeliness=
+plan.state===CONFIG.STATUS.ARMED?80:
+plan.state===CONFIG.STATUS.TRIGGERED?95:
+plan.state===CONFIG.STATUS.WAIT_EXECUTION?100:50;
+
+const locationQuality=Utils.clamp(plan.location.quality||50);
+
+const score=
+marketAlignment*w.MARKET_ALIGNMENT+
+plan.confidence*w.CONFIDENCE+
+rrScore*w.RISK_REWARD+
+timeliness*w.TIMELINESS+
+locationQuality*w.LOCATION_QUALITY;
+
+return{...plan,naviScore:Math.round(Utils.clamp(score))}
+}
+
+selectTop3(){
+this.readMarketView();
+
+this.topPlans=this.plans
+.filter(p=>this.validate(p))
+.map(p=>this.score(p))
+.filter(p=>p.naviScore>=CONFIG.MIN_PLAN_SCORE)
+.sort((a,b)=>b.naviScore-a.naviScore)
+.slice(0,CONFIG.TOP_N_PLANS);
+
+this.topPlans.forEach((p,i)=>p.rank=i+1);
+
+return this.topPlans
+}
+
+monitor(currentPrice){
+return this.topPlans.map(plan=>{
+const before=plan.state;
+const after=StateMachine.evaluate(plan,currentPrice,false,false);
+
+if(before!==after){
+this.monitorLog.push({
+time:new Date().toLocaleTimeString("th-TH"),
+plan:plan.rank,
+from:before,
+to:after
+})
+}
+
+return{
+rank:plan.rank,
+state:after
+}
+})
+}
+}
+
+class MNS{
+static run(packet){
+const preflight=PreFlight.run(packet);
+
+if(!preflight.passed){
+return{
+success:false,
+stage:"PRE_FLIGHT",
+preflight
+}
+}
+
+const map=new MAP(packet);
+
+const direction=map.calculateDirection();
+map.calculateQuality();
+
+const detector=new FutureLocationDetector(map);
+const futureLocations=detector.detect();
+
+const planEngine=new PLAN(map,direction);
+const plans=planEngine.build();
+
+const navi=new NAVI(map,plans);
+const topPlans=navi.selectTop3();
+
+return{
+success:true,
+preflight,
+map,
+direction,
+futureLocations,
+plans,
+topPlans,
+navi
+}
+}
+}
+
+function makePacket(){
+const a=TVMAP[currentSym];
+const mid=a.lastPrice;
+const spread=a.spread;
+const atr=a.atr;
+
+const support=mid-atr*.65;
+const resistance=mid+atr*.65;
+
+return{
+timestamp:Date.now(),
+vision:true,
+conflict:false,
+market:{
+bid:mid-spread/2,
+ask:mid+spread/2,
+mid,
+spread,
+decimals:2
+},
+multiTF:[
+{name:"4H",direction:"UP",strength:82},
+{name:"1H",direction:"UP",strength:78},
+{name:"15M",direction:"UP",strength:68},
+{name:"5M",direction:"UP",strength:60}
+],
+structure:{
+swingLowConfirmed:true,
+swingHighConfirmed:false,
+higherHigh:true,
+lowerLow:false
+},
+liquidity:{
+quality:82
+},
+liquidityFlow:{
+buySide:true,
+sellSide:false
+},
+location:{
+quality:85
+},
+zones:{
+support,
+resistance
+},
+range:{
+support,
+resistance,
+buffer:atr*.12
+},
+session:{
+name:"NORMAL"
+},
+event:{
+hasHighImpact:true,
+minutesToNext:45,
+name:"High Impact Event"
+},
+cycle:{
+phase:"EXPANSION"
+},
+priceBehavior:{
+quality:78
+},
+news:{
+hasHighImpact:true
+}
+}
+}
+
+function setStage(id,state){
+const el=document.getElementById(id);
+el.className="rounded p-2 transition";
+el.classList.add(state==="done"?"bg-emerald-600/30":"bg-yellow-500/30");
+el.classList.add(state==="done"?"text-emerald-300":"text-yellow-300");
+}
+
+function renderPreflight(result){
+document.getElementById("preflightContent").innerHTML=result.checks.map(c=>`
+<div class="flex justify-between bg-slate-900 rounded px-2 py-1">
+<span>${c.name}</span>
+<span class="${c.pass?"text-emerald-400":"text-red-400"}">${c.pass?"PASS":"FAIL"}</span>
+</div>
+`).join("")
+}
+
+function renderMap(result){
+const m=result.map;
+const tf=m.timeframeAlignment();
+
+document.getElementById("mapStatus").innerText=m.direction;
+document.getElementById("mapStatus").className=
+"text-[9px] px-2 py-0.5 rounded border "+
+(m.direction==="UP"
+?"bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+:m.direction==="DOWN"
+?"bg-red-500/20 text-red-300 border-red-500/40"
+:"bg-yellow-500/20 text-yellow-300 border-yellow-500/40");
+
+document.getElementById("mapContent").innerHTML=`
+<div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1.5">
+<div class="flex justify-between"><span class="text-slate-500">Asset</span><b>${currentSym}</b></div>
+<div class="flex justify-between"><span class="text-slate-5
