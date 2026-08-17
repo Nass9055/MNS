@@ -1,0 +1,176 @@
+<div class="flex justify-between"><span class="text-slate-500">Direction</span><b class="${m.direction === 'UP' ? 'text-emerald-400' : m.direction === 'DOWN' ? 'text-red-400' : 'text-yellow-400'}">${m.direction} (${m.confidence}%)</b></div>
+<div class="flex justify-between"><span class="text-slate-500">TF Score</span><b>${tf.score}%</b></div>
+<div class="flex justify-between"><span class="text-slate-500">Quality</span><b class="text-cyan-400">${m.qualityScore}/100</b></div>
+<div class="flex justify-between"><span class="text-slate-500">Support</span><b class="text-emerald-400">${Utils.round(m.zones.support)}</b></div>
+<div class="flex justify-between"><span class="text-slate-500">Resistance</span><b class="text-red-400">${Utils.round(m.zones.resistance)}</b></div>
+</div>
+`;
+}
+
+function renderFutureLocations(result){
+document.getElementById("futureContent").innerHTML = result.futureLocations.map(f => `
+<div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1">
+<div class="flex justify-between text-[10px]">
+<span class="text-slate-400">${f.role}</span>
+<span class="${f.direction === 'BUY' ? 'text-emerald-400' : 'text-red-400'} font-bold">${f.direction}</span>
+</div>
+<div class="flex justify-between font-mono text-[11px]">
+<span>ราคาเป้าหมาย:</span>
+<b class="text-white">${Utils.round(f.price)}</b>
+</div>
+<div class="flex justify-between text-[9px] text-slate-500">
+<span>ประเภท: ${f.type}</span>
+<span>คุณภาพ: ${f.quality}%</span>
+</div>
+</div>
+`).join("");
+}
+
+function renderPlan(result){
+document.getElementById("planContent").innerHTML = result.plans.map(p => `
+<div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1">
+<div class="flex justify-between text-[10px]">
+<span class="font-bold text-indigo-300">${p.name}</span>
+<span class="${p.direction === 'BUY' ? 'text-emerald-400' : 'text-red-400'} font-bold">${p.direction}</span>
+</div>
+<div class="grid grid-cols-2 gap-2 text-[10px] font-mono mt-1">
+<div>Entry: <b class="text-white">${p.entry}</b></div>
+<div>SL: <b class="text-red-400">${p.executionSL}</b></div>
+<div>TP1: <b class="text-emerald-400">${p.tp1}</b></div>
+<div>TP2: <b class="text-emerald-400">${p.tp2}</b></div>
+</div>
+<div class="flex justify-between text-[9px] text-slate-400 mt-1 pt-1 border-t border-slate-800">
+<span>RR: ${p.rr}</span>
+<span class="text-yellow-400">สถานะ: ${p.state}</span>
+</div>
+</div>
+`).join("");
+}
+
+function renderNavi(result){
+document.getElementById("naviContent").innerHTML = result.topPlans.length ? result.topPlans.map(p => `
+<div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1">
+<div class="flex justify-between text-[10px]">
+<span class="font-bold text-yellow-400">#${p.rank} — ${p.name}</span>
+<span class="text-cyan-400 font-bold">Score: ${p.naviScore}</span>
+</div>
+<div class="text-[10px] text-slate-300 font-mono">
+Entry: <b>${p.entry}</b> | SL: <b>${p.executionSL}</b> | TP2: <b>${p.tp2}</b>
+</div>
+<div class="flex justify-between text-[9px] text-slate-400 pt-1 border-t border-slate-800">
+<span>RR: ${p.rr}</span>
+<span class="text-emerald-400">${p.state}</span>
+</div>
+</div>
+`).join("") : '<div class="text-slate-500 text-[10px]">ไม่พบแผนที่ผ่านเกณฑ์ NAVI</div>';
+}
+
+function renderMonitor(result){
+const log = result.navi.monitorLog;
+document.getElementById("monitorContent").innerHTML = log.length ? log.slice(-5).reverse().map(l => `
+<div class="flex justify-between bg-slate-900 rounded px-2 py-1">
+<span class="text-slate-400">[${l.time}] Plan #${l.plan}</span>
+<span>${l.from} ➔ <b class="text-emerald-400">${l.to}</b></span>
+</div>
+`).join("") : '<div class="text-slate-500 text-[10px]">สถานะปกติ ยังไม่มีการเปลี่ยนแปลง</div>';
+}
+
+function runPipeline(){
+const packet = makePacket();
+mnsRuntime = MNS.run(packet);
+
+setStage("stagePreflight", mnsRuntime.success ? "done" : "fail");
+renderPreflight(mnsRuntime.preflight);
+
+if(!mnsRuntime.success){
+alert("Preflight ไม่ผ่าน กรุณาตรวจสอบข้อมูลระบบ");
+return;
+}
+
+setStage("stageMap", "done");
+renderMap(mnsRuntime);
+document.getElementById("mapPanel").classList.remove("hidden");
+
+setStage("stageFuture", "done");
+renderFutureLocations(mnsRuntime);
+document.getElementById("futurePanel").classList.remove("hidden");
+
+setStage("stagePlan", "done");
+renderPlan(mnsRuntime);
+document.getElementById("planPanel").classList.remove("hidden");
+
+setStage("stageNavi", "done");
+renderNavi(mnsRuntime);
+document.getElementById("naviPanel").classList.remove("hidden");
+
+setStage("stageMonitor", "done");
+renderMonitor(mnsRuntime);
+document.getElementById("monitorPanel").classList.remove("hidden");
+
+document.getElementById("initialPrompt").classList.add("hidden");
+
+// Stream log
+const stream = document.getElementById("dataAcquisitionStream");
+const time = new Date().toLocaleTimeString("th-TH");
+stream.innerHTML = `[${time}] สตรีมข้อมูล ${currentSym} สมบูรณ์ ลำดับไปที่ MAP ➔ FUTURE ➔ PLAN ➔ NAVI<br>` + stream.innerHTML;
+
+// Start live monitoring simulation
+if(monitorTimer) clearInterval(monitorTimer);
+monitorTimer = setInterval(()=>{
+if(mnsRuntime && mnsRuntime.navi){
+const currentPrice = TVMAP[currentSym].lastPrice + (Math.random() - 0.5) * TVMAP[currentSym].atr * 0.05;
+mnsRuntime.navi.monitor(currentPrice);
+renderMonitor(mnsRuntime);
+}
+}, 5000);
+}
+
+function loadTradingViewChart(){
+const container = document.getElementById("tradingview_chart_container");
+container.innerHTML = "";
+isWidgetLoading = true;
+
+const sym = TVMAP[currentSym].symbol;
+new TradingView.widget({
+container_id: "tradingview_chart_container",
+autosize: true,
+symbol: sym,
+interval: currentTF,
+timezone: "Asia/Bangkok",
+theme: "dark",
+style: "1",
+locale: "th_TH",
+toolbar_bg: "#1e293b",
+enable_publishing: false,
+hide_side_toolbar: false,
+allow_symbol_change: false,
+studies: ["MACD@tv-basicstudies", "RSI@tv-basicstudies"],
+});
+isWidgetLoading = false;
+}
+
+function renderAssets(){
+const q = document.getElementById("search").value.toUpperCase();
+const list = document.getElementById("assetList");
+list.innerHTML = ASSETS.filter(s => s.includes(q)).map(s => `
+<div onclick="selectAsset('${s}')" class="flex justify-between items-center p-2 rounded-lg cursor-pointer transition text-[11px] mono ${currentSym === s ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' : 'bg-slate-900 hover:bg-slate-800 text-slate-300'}">
+<span>${s}</span>
+<span class="text-[10px] text-slate-500">${TVMAP[s].lastPrice}</span>
+</div>
+`).join("");
+}
+
+function selectAsset(s){
+currentSym = s;
+renderAssets();
+loadTradingViewChart();
+}
+
+window.onload = function(){
+renderAssets();
+loadTradingViewChart();
+};
+</script>
+</body>
+  </html>
+  
