@@ -1,0 +1,1243 @@
+// ============================================================
+// MNS — PLAN ENGINE
+// LATEST STANDARD — PRE-EMPTIVE PLAN ARCHITECTURE
+// ============================================================
+//
+// ARCHITECTURE
+// MAP ≠ PLAN ≠ NAVI
+//
+// MAP
+//   ↓
+// Future Locations + Structure + Context + Spread
+//   ↓
+// PLAN ENGINE
+//   ↓
+// Pre-Emptive Plans
+//   ↓
+// Technical SL
+//   ↓
+// Execution SL (using MAP Spread)
+//   ↓
+// TP1 / TP2 / Trigger / Invalidation
+//   ↓
+// NAVI
+//
+// PLAN DOES NOT:
+// - read indicators
+// - make NAVI decisions
+// - rank plans
+// - execute orders
+// - create a plan after price has already reached Entry
+//
+// ============================================================
+
+const MNS_PLAN_STANDARD = Object.freeze({
+
+  VERSION: "LATEST",
+
+  ARCHITECTURE: Object.freeze({
+    MAP_IS_NOT_PLAN: true,
+    PLAN_IS_NOT_NAVI: true,
+    PRE_EMPTIVE: true,
+    NO_CHASING: true,
+    SPREAD_SOURCE: "MAP"
+  }),
+
+  TRAP: Object.freeze({
+    entryZonePct: 0.05,
+    slMultiplier: 0.02,
+    minRR: 1.5
+  }),
+
+  DIRECT: Object.freeze({
+    minTrendStrength: 60,
+    maxRetestPct: 0.15,
+    slMultiplier: 0.02,
+    minRR: 2.5
+  }),
+
+  EVENT: Object.freeze({
+    entryZonePct: 0.05,
+    slMultiplier: 3,
+    minTpMultiplier: 10
+  }),
+
+  TIME: Object.freeze({
+    entryZonePct: 0.05,
+    slMultiplier: 2,
+    minRR: 1.5
+  }),
+
+  EXECUTION: Object.freeze({
+    BUY: "Technical SL - Spread",
+    SELL: "Technical SL + Spread"
+  })
+
+});
+
+
+// ============================================================
+// 1. UTILITY
+// ============================================================
+
+function roundPrice(value, decimals = 2) {
+  if (!Number.isFinite(value)) return null;
+
+  const factor = Math.pow(10, decimals);
+
+  return Math.round(value * factor) / factor;
+}
+
+
+function validNumber(value) {
+  return Number.isFinite(Number(value));
+}
+
+
+function normalizeSpread(spread) {
+
+  const value = Number(spread);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return value;
+}
+
+
+// ============================================================
+// 2. MAP INPUT VALIDATION
+// ============================================================
+//
+// PLAN รับข้อมูลจาก MAP เท่านั้น
+//
+// Required:
+// - currentPrice
+// - spread
+// - futureLocations / swingLow / swingHigh
+//
+// ============================================================
+
+function validateMapInput(map) {
+
+  if (!map || typeof map !== "object") {
+    return {
+      valid: false,
+      reason: "MAP INPUT MISSING"
+    };
+  }
+
+  if (!validNumber(map.currentPrice)) {
+    return {
+      valid: false,
+      reason: "CURRENT PRICE MISSING"
+    };
+  }
+
+  const spread = normalizeSpread(map.spread);
+
+  if (spread === null) {
+    return {
+      valid: false,
+      reason: "INVALID MAP SPREAD"
+    };
+  }
+
+  if (
+    !validNumber(map.swingLow) ||
+    !validNumber(map.swingHigh) ||
+    Number(map.swingHigh) <= Number(map.swingLow)
+  ) {
+    return {
+      valid: false,
+      reason: "INVALID MARKET RANGE"
+    };
+  }
+
+  return {
+    valid: true,
+    currentPrice: Number(map.currentPrice),
+    spread,
+    swingLow: Number(map.swingLow),
+    swingHigh: Number(map.swingHigh),
+    futureLocations: Array.isArray(map.futureLocations)
+      ? map.futureLocations
+      : []
+  };
+}
+
+
+// ============================================================
+// 3. EXECUTION SL
+// ============================================================
+//
+// Spread อยู่ใน MAP
+// PLAN ดึง Spread มาใช้เฉพาะ Execution SL
+//
+// BUY:
+// Execution SL = Technical SL - Spread
+//
+// SELL:
+// Execution SL = Technical SL + Spread
+//
+// ============================================================
+
+function calculateExecutionSL(side, technicalSL, spread) {
+
+  if (!validNumber(technicalSL) || !validNumber(spread)) {
+    return null;
+  }
+
+  if (side === "BUY") {
+    return roundPrice(
+      Number(technicalSL) - Number(spread)
+    );
+  }
+
+  if (side === "SELL") {
+    return roundPrice(
+      Number(technicalSL) + Number(spread)
+    );
+  }
+
+  return null;
+}
+
+
+// ============================================================
+// 4. RISK / RR
+// ============================================================
+
+function calculateRR(side, entry, executionSL, target) {
+
+  const risk = Math.abs(
+    Number(entry) - Number(executionSL)
+  );
+
+  const reward = Math.abs(
+    Number(target) - Number(entry)
+  );
+
+  if (risk <= 0) return 0;
+
+  return Number(
+    (reward / risk).toFixed(2)
+  );
+}
+
+
+// ============================================================
+// 5. PRE-EMPTIVE ARM CHECK
+// ============================================================
+//
+// สำคัญมาก:
+//
+// PLAN ต้องถูกสร้างและ ARM ก่อนราคาเข้า Entry
+//
+// ถ้า currentPrice อยู่ใน Entry Zone ตั้งแต่ตอนสร้าง PLAN
+// PLAN ถือว่า MISSED สำหรับ Pullback Trap
+//
+// ============================================================
+
+function evaluatePreEmptiveArm(
+  currentPrice,
+  entryZone,
+  direction,
+  planCreatedAt = Date.now()
+) {
+
+  const [zoneLow, zoneHigh] = entryZone;
+
+  let missed = false;
+
+  if (direction === "BUY") {
+
+    // BUY Trap ต้องรอราคาลงมาทดสอบ
+    if (
+      currentPrice >= zoneLow &&
+      currentPrice <= zoneHigh
+    ) {
+      missed = true;
+    }
+
+  }
+
+  if (direction === "SELL") {
+
+    // SELL Trap ต้องรอราคาขึ้นมาทดสอบ
+    if (
+      currentPrice >= zoneLow &&
+      currentPrice <= zoneHigh
+    ) {
+      missed = true;
+    }
+
+  }
+
+  return {
+    armed: !missed,
+    status: missed ? "MISSED" : "ARMED",
+    planCreatedAt
+  };
+}
+
+
+// ============================================================
+// 6. TRAP PLAN
+// ============================================================
+//
+// TRAP = วางแผนล่วงหน้า
+// ไม่ไล่ราคา
+//
+// ============================================================
+
+function createTrapPlan(map) {
+
+  const validation = validateMapInput(map);
+
+  if (!validation.valid) {
+    return {
+      type: "TRAP PLAN",
+      allowed: false,
+      status: "REJECTED",
+      reason: validation.reason
+    };
+  }
+
+  const {
+    currentPrice,
+    spread,
+    swingLow,
+    swingHigh
+  } = validation;
+
+  const range = swingHigh - swingLow;
+
+  const zoneSize =
+    range *
+    MNS_PLAN_STANDARD.TRAP.entryZonePct;
+
+  const slDistance =
+    range *
+    MNS_PLAN_STANDARD.TRAP.slMultiplier;
+
+  const buyZone = [
+    swingLow,
+    swingLow + zoneSize
+  ];
+
+  const sellZone = [
+    swingHigh - zoneSize,
+    swingHigh
+  ];
+
+  const buyTechnicalSL =
+    swingLow - slDistance;
+
+  const sellTechnicalSL =
+    swingHigh + slDistance;
+
+  const buyExecutionSL =
+    calculateExecutionSL(
+      "BUY",
+      buyTechnicalSL,
+      spread
+    );
+
+  const sellExecutionSL =
+    calculateExecutionSL(
+      "SELL",
+      sellTechnicalSL,
+      spread
+    );
+
+  const buyRR =
+    calculateRR(
+      "BUY",
+      buyZone[1],
+      buyExecutionSL,
+      swingHigh
+    );
+
+  const sellRR =
+    calculateRR(
+      "SELL",
+      sellZone[0],
+      sellExecutionSL,
+      swingLow
+    );
+
+  const buyArm =
+    evaluatePreEmptiveArm(
+      currentPrice,
+      buyZone,
+      "BUY"
+    );
+
+  const sellArm =
+    evaluatePreEmptiveArm(
+      currentPrice,
+      sellZone,
+      "SELL"
+    );
+
+  return {
+
+    type: "TRAP PLAN",
+
+    version: MNS_PLAN_STANDARD.VERSION,
+
+    allowed: true,
+
+    preEmptive: true,
+
+    rule:
+      "ARM ก่อนราคาเข้า Entry Zone — ห้ามไล่ราคา",
+
+    buy: {
+
+      side: "BUY",
+
+      entryZone: buyZone.map(
+        p => roundPrice(p)
+      ),
+
+      technicalSL:
+        roundPrice(buyTechnicalSL),
+
+      executionSL:
+        buyExecutionSL,
+
+      tp1:
+        roundPrice(
+          swingLow + range * 0.618
+        ),
+
+      tp2:
+        roundPrice(swingHigh),
+
+      rr:
+        buyRR,
+
+      state:
+        buyArm.status,
+
+      arm:
+        buyArm
+
+    },
+
+    sell: {
+
+      side: "SELL",
+
+      entryZone: sellZone.map(
+        p => roundPrice(p)
+      ),
+
+      technicalSL:
+        roundPrice(sellTechnicalSL),
+
+      executionSL:
+        sellExecutionSL,
+
+      tp1:
+        roundPrice(
+          swingHigh - range * 0.618
+        ),
+
+      tp2:
+        roundPrice(swingLow),
+
+      rr:
+        sellRR,
+
+      state:
+        sellArm.status,
+
+      arm:
+        sellArm
+
+    },
+
+    executionData: {
+
+      spread:
+        roundPrice(spread),
+
+      source:
+        "MAP"
+
+    },
+
+    status: "ARMED",
+
+    locked: true
+
+  };
+}
+
+
+// ============================================================
+// 7. DIRECT PLAN
+// ============================================================
+//
+// DIRECT ใช้เมื่อ:
+// - Trend Strength >= 60
+// - ราคาอยู่ใกล้ Retest
+//
+// Trend Direction ต้องแยกจาก Trend Strength
+//
+// ============================================================
+
+function createDirectPlan(map) {
+
+  const validation = validateMapInput(map);
+
+  if (!validation.valid) {
+    return {
+      type: "DIRECT PLAN",
+      allowed: false,
+      status: "REJECTED",
+      reason: validation.reason
+    };
+  }
+
+  const {
+    currentPrice,
+    spread,
+    swingLow,
+    swingHigh
+  } = validation;
+
+  const trendStrength =
+    Number(map.trendStrength);
+
+  const trendDirection =
+    String(
+      map.trendDirection || ""
+    ).toUpperCase();
+
+  if (
+    !Number.isFinite(trendStrength)
+  ) {
+
+    return {
+      type: "DIRECT PLAN",
+      allowed: false,
+      reason:
+        "TREND STRENGTH MISSING"
+    };
+
+  }
+
+  if (
+    trendDirection !== "UP" &&
+    trendDirection !== "DOWN"
+  ) {
+
+    return {
+      type: "DIRECT PLAN",
+      allowed: false,
+      reason:
+        "TREND DIRECTION MISSING"
+    };
+
+  }
+
+  const range =
+    swingHigh - swingLow;
+
+  const distanceToNearestBoundary =
+    Math.min(
+      Math.abs(currentPrice - swingLow),
+      Math.abs(currentPrice - swingHigh)
+    );
+
+  const proximityRatio =
+    distanceToNearestBoundary / range;
+
+  const strongTrend =
+    trendStrength >=
+    MNS_PLAN_STANDARD.DIRECT.minTrendStrength;
+
+  const nearRetest =
+    proximityRatio <=
+    MNS_PLAN_STANDARD.DIRECT.maxRetestPct;
+
+  if (!strongTrend || !nearRetest) {
+
+    return {
+
+      type: "DIRECT PLAN",
+
+      allowed: false,
+
+      reason:
+        !strongTrend
+          ? "TREND STRENGTH BELOW 60"
+          : "PRICE TOO FAR FROM RETEST ZONE",
+
+      suggestion:
+        "USE TRAP PLAN",
+
+      locked: true
+
+    };
+
+  }
+
+  const slDistance =
+    range *
+    MNS_PLAN_STANDARD.DIRECT.slMultiplier;
+
+  const tpDistance =
+    range * 0.618;
+
+  if (trendDirection === "UP") {
+
+    const technicalSL =
+      swingLow - slDistance;
+
+    const executionSL =
+      calculateExecutionSL(
+        "BUY",
+        technicalSL,
+        spread
+      );
+
+    const tp1 =
+      currentPrice +
+      tpDistance * 0.618;
+
+    const tp2 =
+      currentPrice +
+      tpDistance;
+
+    const rr =
+      calculateRR(
+        "BUY",
+        currentPrice,
+        executionSL,
+        tp2
+      );
+
+    if (
+      rr <
+      MNS_PLAN_STANDARD.DIRECT.minRR
+    ) {
+
+      return {
+        type: "DIRECT PLAN",
+        allowed: false,
+        reason: "RR BELOW MINIMUM",
+        locked: true
+      };
+
+    }
+
+    return {
+
+      type: "DIRECT PLAN",
+
+      allowed: true,
+
+      side: "BUY",
+
+      entry:
+        roundPrice(currentPrice),
+
+      technicalSL:
+        roundPrice(technicalSL),
+
+      executionSL,
+
+      tp1:
+        roundPrice(tp1),
+
+      tp2:
+        roundPrice(tp2),
+
+      rr,
+
+      trend: {
+
+        direction: "UP",
+
+        strength: trendStrength
+
+      },
+
+      status:
+        "READY — BUY",
+
+      locked: true
+
+    };
+
+  }
+
+
+  // DOWN
+
+  const technicalSL =
+    swingHigh + slDistance;
+
+  const executionSL =
+    calculateExecutionSL(
+      "SELL",
+      technicalSL,
+      spread
+    );
+
+  const tp1 =
+    currentPrice -
+    tpDistance * 0.618;
+
+  const tp2 =
+    currentPrice -
+    tpDistance;
+
+  const rr =
+    calculateRR(
+      "SELL",
+      currentPrice,
+      executionSL,
+      tp2
+    );
+
+  if (
+    rr <
+    MNS_PLAN_STANDARD.DIRECT.minRR
+  ) {
+
+    return {
+      type: "DIRECT PLAN",
+      allowed: false,
+      reason: "RR BELOW MINIMUM",
+      locked: true
+    };
+
+  }
+
+  return {
+
+    type: "DIRECT PLAN",
+
+    allowed: true,
+
+    side: "SELL",
+
+    entry:
+      roundPrice(currentPrice),
+
+    technicalSL:
+      roundPrice(technicalSL),
+
+    executionSL,
+
+    tp1:
+      roundPrice(tp1),
+
+    tp2:
+      roundPrice(tp2),
+
+    rr,
+
+    trend: {
+
+      direction: "DOWN",
+
+      strength: trendStrength
+
+    },
+
+    status:
+      "READY — SELL",
+
+    locked: true
+
+  };
+
+}
+
+
+// ============================================================
+// 8. EVENT TRAP
+// ============================================================
+//
+// EVENT PLAN ต้องเตรียมก่อน Event
+//
+// SL = Normal SL × 3
+// TP >= Normal SL × 10
+//
+// historicalMultiplier สามารถเพิ่ม TP
+// แต่ไม่ลดต่ำกว่า 10×
+//
+// ============================================================
+
+function createEventTrapPlan(map) {
+
+  const validation = validateMapInput(map);
+
+  if (!validation.valid) {
+
+    return {
+      type: "EVENT TRAP",
+      allowed: false,
+      status: "REJECTED",
+      reason: validation.reason
+    };
+
+  }
+
+  const {
+    currentPrice,
+    spread
+  } = validation;
+
+  const normalSLDistance =
+    Number(map.normalSLDistance);
+
+  if (
+    !Number.isFinite(normalSLDistance) ||
+    normalSLDistance <= 0
+  ) {
+
+    return {
+      type: "EVENT TRAP",
+      allowed: false,
+      reason:
+        "NORMAL SL DISTANCE MISSING"
+    };
+
+  }
+
+  const historicalMultiplier =
+    Number(map.historicalMultiplier);
+
+  const tpMultiplier =
+    Math.max(
+      MNS_PLAN_STANDARD.EVENT.minTpMultiplier,
+      Number.isFinite(historicalMultiplier)
+        ? historicalMultiplier
+        : MNS_PLAN_STANDARD.EVENT.minTpMultiplier
+    );
+
+  const slDistance =
+    normalSLDistance *
+    MNS_PLAN_STANDARD.EVENT.slMultiplier;
+
+  const tpDistance =
+    normalSLDistance *
+    tpMultiplier;
+
+  const entryZoneDistance =
+    currentPrice *
+    MNS_PLAN_STANDARD.EVENT.entryZonePct;
+
+  const entryZone = [
+
+    currentPrice -
+    entryZoneDistance,
+
+    currentPrice +
+    entryZoneDistance
+
+  ];
+
+  const buyTechnicalSL =
+    currentPrice - slDistance;
+
+  const sellTechnicalSL =
+    currentPrice + slDistance;
+
+  const buyExecutionSL =
+    calculateExecutionSL(
+      "BUY",
+      buyTechnicalSL,
+      spread
+    );
+
+  const sellExecutionSL =
+    calculateExecutionSL(
+      "SELL",
+      sellTechnicalSL,
+      spread
+    );
+
+  return {
+
+    type: "EVENT TRAP",
+
+    allowed: true,
+
+    preEmptive: true,
+
+    rule:
+      "ARM ก่อน Event — SL 3× — TP ≥ 10×",
+
+    entryZone:
+      entryZone.map(
+        p => roundPrice(p)
+      ),
+
+    buy: {
+
+      side: "BUY",
+
+      entry:
+        roundPrice(currentPrice),
+
+      technicalSL:
+        roundPrice(buyTechnicalSL),
+
+      executionSL:
+        buyExecutionSL,
+
+      tp1:
+        roundPrice(
+          currentPrice +
+          tpDistance * 0.5
+        ),
+
+      tp2:
+        roundPrice(
+          currentPrice +
+          tpDistance
+        )
+
+    },
+
+    sell: {
+
+      side: "SELL",
+
+      entry:
+        roundPrice(currentPrice),
+
+      technicalSL:
+        roundPrice(sellTechnicalSL),
+
+      executionSL:
+        sellExecutionSL,
+
+      tp1:
+        roundPrice(
+          currentPrice -
+          tpDistance * 0.5
+        ),
+
+      tp2:
+        roundPrice(
+          currentPrice -
+          tpDistance
+        )
+
+    },
+
+    metrics: {
+
+      slDistance:
+        roundPrice(slDistance),
+
+      tpDistance:
+        roundPrice(tpDistance),
+
+      tpMultiplier:
+        `${tpMultiplier.toFixed(1)}×`,
+
+      rr:
+        `1 : ${(
+          tpDistance /
+          slDistance
+        ).toFixed(2)}`
+
+    },
+
+    status:
+      "ARMED — รอ EVENT",
+
+    locked: true
+
+  };
+
+}
+
+
+// ============================================================
+// 9. TIME TRAP
+// ============================================================
+//
+// Time Trap ใช้เมื่อ MAP ตรวจพบ:
+// - Session transition
+// - Opening window
+// - Time-based future location
+// - Recurrent time behavior
+//
+// PLAN ไม่ตีความ Time Intelligence เอง
+// MAP เป็นผู้ส่งข้อมูลมา
+//
+// ============================================================
+
+function createTimeTrapPlan(map) {
+
+  const validation =
+    validateMapInput(map);
+
+  if (!validation.valid) {
+
+    return {
+      type: "TIME TRAP",
+      allowed: false,
+      reason: validation.reason
+    };
+
+  }
+
+  const {
+    currentPrice,
+    spread,
+    swingLow,
+    swingHigh
+  } = validation;
+
+  const range =
+    swingHigh - swingLow;
+
+  const slDistance =
+    range *
+    MNS_PLAN_STANDARD.TIME.slMultiplier;
+
+  const zoneDistance =
+    range *
+    MNS_PLAN_STANDARD.TIME.entryZonePct;
+
+  const futureTimeEvent =
+    map.futureTimeEvent;
+
+  if (!futureTimeEvent) {
+
+    return {
+      type: "TIME TRAP",
+      allowed: false,
+      reason:
+        "MAP FUTURE TIME EVENT MISSING"
+    };
+
+  }
+
+  const buyTechnicalSL =
+    swingLow - slDistance;
+
+  const sellTechnicalSL =
+    swingHigh + slDistance;
+
+  const buyExecutionSL =
+    calculateExecutionSL(
+      "BUY",
+      buyTechnicalSL,
+      spread
+    );
+
+  const sellExecutionSL =
+    calculateExecutionSL(
+      "SELL",
+      sellTechnicalSL,
+      spread
+    );
+
+  const buyEntry =
+    swingLow + zoneDistance;
+
+  const sellEntry =
+    swingHigh - zoneDistance;
+
+  return {
+
+    type: "TIME TRAP",
+
+    allowed: true,
+
+    preEmptive: true,
+
+    event:
+      futureTimeEvent,
+
+    buy: {
+
+      side: "BUY",
+
+      entry:
+        roundPrice(buyEntry),
+
+      technicalSL:
+        roundPrice(buyTechnicalSL),
+
+      executionSL:
+        buyExecutionSL,
+
+      tp1:
+        roundPrice(
+          buyEntry +
+          range * 0.618
+        ),
+
+      tp2:
+        roundPrice(swingHigh),
+
+      rr:
+        calculateRR(
+          "BUY",
+          buyEntry,
+          buyExecutionSL,
+          swingHigh
+        )
+
+    },
+
+    sell: {
+
+      side: "SELL",
+
+      entry:
+        roundPrice(sellEntry),
+
+      technicalSL:
+        roundPrice(sellTechnicalSL),
+
+      executionSL:
+        sellExecutionSL,
+
+      tp1:
+        roundPrice(
+          sellEntry -
+          range * 0.618
+        ),
+
+      tp2:
+        roundPrice(swingLow),
+
+      rr:
+        calculateRR(
+          "SELL",
+          sellEntry,
+          sellExecutionSL,
+          swingLow
+        )
+
+    },
+
+    status:
+      "ARMED — รอ TIME EVENT",
+
+    locked: true
+
+  };
+
+}
+
+
+// ============================================================
+// 10. FUTURE LOCATION → PLAN
+// ============================================================
+//
+// MAP เป็นผู้หา Future Location
+// PLAN มีหน้าที่สร้างแผนจาก Location
+//
+// ============================================================
+
+function buildPlansFromFutureLocations(map) {
+
+  const validation =
+    validateMapInput(map);
+
+  if (!validation.valid) {
+
+    return {
+
+      allowed: false,
+
+      reason: validation.reason,
+
+      plans: []
+
+    };
+
+  }
+
+  const plans = [];
+
+  const locations =
+    validation.futureLocations;
+
+  locations.forEach(
+    (location, index) => {
+
+      if (
+        !location ||
+        !validNumber(location.price)
+      ) {
+        return;
+      }
+
+      const price =
+        Number(location.price);
+
+      const side =
+        String(
+          location.side || ""
+        ).toUpperCase();
+
+      if (
+        side !== "BUY" &&
+        side !== "SELL"
+      ) {
+        return;
+      }
+
+      const technicalSL =
+        validNumber(location.technicalSL)
+          ? Number(location.technicalSL)
+          : null;
+
+      if (technicalSL === null) {
+        return;
+      }
+
+      const executionSL =
+        calculateExecutionSL(
+          side,
+          technicalSL,
+          validation.spread
+        );
+
+      const tp1 =
+        validNumber(location.tp1)
+          ? Number(location.tp1)
+          : null;
+
+      const tp2 =
+        validNumber(location.tp2)
+          ? Number(location.tp2)
+          : null;
+
+      plans.push({
+
+        id:
+          `MNS-PLAN-${Date.now()}-${index}`,
+
+        type:
+          location.type ||
+          "FUTURE LOCATION PLAN",
+
+        side,
+
+        location: {
+
+          price:
+            roundPrice(price),
+
+          source:
+            loca
