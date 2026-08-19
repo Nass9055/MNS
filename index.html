@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="MNS Pro — MAP PLAN NAVI Gold Analysis Dashboard">
+    <title>MNS Pro V1.8.4 — Local MAP Scanner & Non-Overlapping</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- TradingView Widget Script -->
+    <script src="https://s3.tradingview.com/tv.js"></script>
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html, body {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background: #020617;
+            font-family: 'Inter', system-ui, sans-serif;
+            color: #f8fafc;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* โครงสร้างแผงควบคุมด้านบน (Non-Overlapping) */
+        .mns-panel {
+            flex: 0 0 auto;
+            position: relative;
+            z-index: 50;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.99), rgba(15, 23, 42, 0.96));
+            border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            transition: max-height 0.3s ease;
+            max-height: 58vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .mns-panel.collapsed {
+            max-height: 52px;
+        }
+
+        .mns-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+            background: rgba(15, 23, 42, 1);
+            flex-shrink: 0;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .mns-title {
+            font-weight: 800;
+            font-size: 15px;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .mns-title span {
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+        .mns-status {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.15);
+            color: #86efac;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            font-weight: 700;
+        }
+
+        .mns-inner {
+            overflow-y: auto;
+            flex: 1 1 auto;
+            max-height: calc(58vh - 52px);
+            padding: 0 14px 14px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(59, 130, 246, 0.4) transparent;
+        }
+        .mns-inner::-webkit-scrollbar {
+            width: 5px;
+        }
+        .mns-inner::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.4);
+            border-radius: 5px;
+        }
+
+        .user-stats {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 5px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            margin-left: auto;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 10px;
+            color: #94a3b8;
+        }
+        .stat-value {
+            font-size: 14px;
+            font-weight: 800;
+            color: #fbbf24;
+        }
+        .stat-divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(59, 130, 246, 0.2);
+        }
+        .toggle-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 0;
+            background: rgba(59, 130, 246, 0.25);
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 800;
+        }
+        .toggle-btn:hover {
+            background: rgba(59, 130, 246, 0.45);
+        }
+
+        .mns-tabs {
+            display: flex;
+            gap: 3px;
+            padding-top: 8px;
+            flex-wrap: wrap;
+        }
+        .mns-tab {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+        .mns-tab:hover {
+            color: #e0f2fe;
+            background: rgba(59, 130, 246, 0.08);
+        }
+        .mns-tab.active {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-bottom-color: #0f172a;
+            color: #93c5fd;
+        }
+        .mns-content {
+            padding: 12px 0;
+            border-top: 1px solid rgba(59, 130, 246, 0.15);
+        }
+        .hidden-tab {
+            display: none !important;
+        }
+
+        /* พื้นที่กราฟ TradingView ด้านล่าง เต็มจอพอดี */
+        .chart-wrapper {
+            flex: 1 1 auto;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #020617;
+            overflow: hidden;
+        }
+        #chart-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .mns-label {
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+        .mns-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        @media(max-width: 640px) {
+            .mns-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media(max-width: 400px) {
+            .mns-grid { grid-template-columns: 1fr; }
+        }
+
+        .mns-input {
+            background: rgba(30, 41, 59, 0.9);
+            border: 2px solid rgba(71, 85, 105, 0.5);
+            border-radius: 10px;
+            padding: 9px 12px;
+            color: #f8fafc;
+            font-size: 14px;
+            width: 100%;
+            font-weight: 600;
+        }
+        .mns-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        .mns-input.border-amber {
+            border-color: rgba(251, 191, 36, 0.4);
+        }
+
+        .mns-btn {
+            width: 100%;
+            padding: 11px 16px;
+            border-radius: 10px;
+            font-weight: 800;
+            font-size: 14px;
+            background: linear-gradient(135deg, #3b82f6, #6366f1, #8b5cf6);
+            color: #fff;
+            border: 0;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+        .mns-btn:hover {
+            filter: brightness(1.08);
+        }
+
+        .plan-card {
+            border-radius: 10px;
+            border-left: 4px solid #3b82f6;
+            padding: 12px;
+            margin-top: 10px;
+            background: linear-gradient(135deg, rgba(30, 64, 175, 0.25), rgba(30, 41, 59, 0.5));
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .armed {
+            background: rgba(16, 185, 129, 0.2);
+            color: #86efac;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            margin: 2px;
+        }
+        .liq { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+        .sweep { background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
+        .pull { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+        .trend { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; }
+        .ev { background: rgba(236, 72, 153, 0.15); color: #f9a8d4; }
+
+        .tip-box {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #93c5fd;
+        }
+        .result-box {
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            font-size: 12px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        .broker-link {
+            display: block;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .broker-emerald { background: rgba(16, 185, 129, 0.15); color: #86efac; border: 1px solid rgba(16, 185, 129, 0.25); }
+        .broker-yellow { background: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.25); }
+        .broker-amber { background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.25); }
+
+        .comment-section { margin-top: 10px; }
+        .comment-tabs { display: flex; gap: 6px; margin-bottom: 8px; border-bottom: 1px solid rgba(59, 130, 246, 0.15); }
+        .comment-tab { padding: 6px 10px; font-size: 12px; border-radius: 8px 8px 0 0; cursor: pointer; color: #94a3b8; border-bottom: 2px solid transparent; }
+        .comment-tab.active { color: #93c5fd; border-bottom-color: #3b82f6; background: rgba(59, 130, 246, 0.08); }
+        .comment-input-wrap { position: relative; margin-bottom: 8px; }
+        .comment-textarea { width: 100%; min-height: 60px; background: rgba(30, 41, 59, 0.8); border: 2px solid rgba(71, 85, 105, 0.5); border-radius: 8px; padding: 8px; color: #f8fafc; font-size: 13px; resize: none; outline: none; }
+        .comment-textarea:focus { border-color: #3b82f6; }
+        .comment-btn { position: absolute; bottom: 8px; right: 8px; padding: 4px 10px; border-radius: 6px; background: linear-gradient(135deg, #3b82f6, #6366f1); color: white; border: 0; font-weight: 700; font-size: 11px; cursor: pointer; }
+        .comment-list { max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+        .comment-item { background: rgba(30, 41, 59, 0.6); border-radius: 8px; padding: 8px; border-left: 3px solid #3b82f6; }
+        .comment-header { display: flex; gap: 6px; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; }
+        .comment-author { font-weight: 700; font-size: 12px; color: #93c5fd; }
+        .comment-time { font-size: 10px; color: #64748b; }
+        .comment-text { font-size: 13px; line-height: 1.5; color: #e2e8f0; white-space: pre-wrap; word-break: break-word; }
+        .comment-delete { font-size: 10px; padding: 2px 5px; border-radius: 4px; background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 0; cursor: pointer; }
+        .empty-comment { text-align: center; padding: 12px; color: #64748b; font-size: 12px; }
+        button, input, select, textarea { font: inherit; }
+    </style>
+</head>
+<body>
+
+<!-- แผงควบคุมด้านบน -->
+<div class="mns-panel" id="mnsPanel">
+  <div class="mns-header">
+    <div class="mns-title">🧭 MNS Pro <span>V1.8.4 — Local MAP Scanner</span></div>
+    <div class="user-stats">
+      <div class="stat-item"><div class="stat-label">วันนี้</div><div class="stat-value" id="userToday">0</div></div>
+      <div class="stat-divider"></div>
+      <div class="stat-item"><div class="stat-label">สะสม</div><div class="stat-value" id="userTotal">0</div></div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="mns-status">🛡️ Local Mode</span>
+      <button class="toggle-btn" id="togglePanelBtn" title="ซ่อน/แสดงแผง">−</button>
+    </div>
+  </div>
+  
+  <div class="mns-inner">
+    <div class="mns-tabs">
+      <div class="mns-tab active" data-tab="map">🗺️ MAP</div>
+      <div class="mns-tab" data-tab="plan">📋 PLAN</div>
+      <div class="mns-tab" data-tab="navi">🧭 NAVI</div>
+      <div class="mns-tab" data-tab="broker">🔗 โบรก</div>
+      <div class="mns-tab" data-tab="comments">💬 คอมเมนต์</div>
+    </div>
+    
+    <div class="mns-content">
+      <!-- TAB MAP -->
+      <div id="tab-map">
+        <div class="mb-3">
+          <div class="mns-label">📊 ข้อมูลกราฟปัจจุบัน (กรอกข้อมูลจากกราฟที่คุณสแกน)</div>
+          <div class="mns-grid">
+            <div>
+              <div class="text-xs text-slate-400 mb-1">🔺 Swing High</div>
+              <input id="inpHigh" type="number" step="any" class="mns-input" placeholder="0.00" value="2650.00">
+            </div>
+            <div>
+              <div class="text-xs text-slate-400 mb-1">🔻 Swing Low</div>
+              <input id="inpLow" type="number" step="any" class="mns-input" placeholder="0.00" value="2610.00">
+            </div>
+            <div>
+              <div class="text-xs text-slate-400 mb-1">⭐ ราคาปัจจุบัน</div>
+              <input id="inpPrice" type="number" step="any" class="mns-input border-amber" placeholder="0.00" value="2630.00">
+            </div>
+          </div>
+        </div>
+        
+        <div class="mb-3">
+          <div class="mns-label">⚙️ Spread · เทรน · ทิศทาง</div>
+          <div class="mns-grid">
+            <div>
+              <div class="text-xs text-slate-400 mb-1">Spread ($)</div>
+              <input id="inpSpread" type="number" step="0.01" value="0.45" class="mns-input">
+            </div>
+            <div>
+              <div class="text-xs text-slate-400 mb-1">เทรน %</div>
+              <input id="inpTrend" type="number" value="65" min="0" max="100" class="mns-input">
+            </div>
+            <div>
+              <div class="text-xs text-slate-400 mb-1">ทิศทาง</div>
+              <select id="inpDir" class="mns-input">
+                <option>UP</option>
+                <option>DOWN</option>
+                <option>NONE</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="tip-box">💡 ดูราคากราฟด้านล่าง แล้วนำค่า High, Low และราคาปัจจุบันมาใส่ จากนั้นกดปุ่ม <b>"สร้างภาพตลาด + วางแผน"</b> ด้านล่าง</div>
+        </div>
+
+        <div class="mb-3">
+          <div class="mns-label">🧠 วิเคราะห์ 5 มิติ · คุณภาพ MAP: <span id="mapScore" class="text-amber-400 font-bold text-base">0%</span></div>
+          <div>
+            <span class="tag liq">💧 สภาพคล่อง</span>
+            <span class="tag sweep">🧹 ราคาทะลุ</span>
+            <span class="tag pull">🔁 ย่อตัว</span>
+            <span class="tag trend">📈 เทรน</span>
+            <span class="tag ev">🚨 ข่าว/เหตุการณ์</span>
+          </div>
+        </div>
+
+        <div id="mapResult" class="result-box">ตรวจสอบราคาจากกราฟ แล้วกดปุ่มสร้างแผนด้านล่างได้เลยครับ</div>
+        <button type="button" id="buildMapBtn" class="mns-btn">🗺️ สร้างภาพตลาด + วางแผนการเทรด</button>
+      </div>
+
+      <!-- TAB PLAN -->
+      <div id="tab-plan" class="hidden-tab">
+        <div class="mns-label">📋 แผนล่วงหน้า — วาง SL ก่อน Entry เสมอ</div>
+        <div id="planResult" class="mt-2 text-xs">กรอกข้อมูลและกดสร้างแผนในแท็บ MAP ก่อน</div>
+      </div>
+
+      <!-- TAB NAVI -->
+      <div id="tab-navi" class="hidden-tab">
+        <div class="mns-label">🧭 คำแนะนำ & เฝ้าติดตาม · อายุแผน: <span id="age" class="text-amber-400 font-bold">0</span> นาที</div>
+        <div id="naviResult" class="mt-2 text-xs">สร้างแผนในแท็บ MAP ก่อน</div>
+      </div>
+
+      <!-- TAB BROKER -->
+      <div id="tab-broker" class="hidden-tab">
+        <div class="mns-label">🔗 โบรกเกอร์ / เครื่องมือ</div>
+        <div class="mt-2">
+          <a href="https://i.miactivitys.com/index-th-TH.html?c=FT9GU&na=TH" target="_blank" rel="noopener noreferrer" class="broker-link broker-emerald">🥇 Mitrade — เปิดบัญชีเทรด</a>
+          <a href="https://one.exnessonelink.com/a/80dmb5wr12" target="_blank" rel="noopener noreferrer" class="broker-link broker-yellow">📊 Exness — เชื่อมต่อ MT5</a>
+          <a href="https://www.tradingview.com/symbols/XAUUSD/" target="_blank" rel="noopener noreferrer" class="broker-link broker-amber">📈 XAUUSD — ดูกราฟเต็มรูปแบบ</a>
+        </div>
+      </div>
+
+      <!-- TAB COMMENTS -->
+      <div id="tab-comments" class="hidden-tab">
+        <div class="comment-section">
+          <div class="comment-tabs">
+            <div class="comment-tab active" data-cmtab="private">📝 บันทึกส่วนตัว</div>
+            <div class="comment-tab" data-cmtab="public">💬 คอมเมนต์สาธารณะ</div>
+          </div>
+          <div id="cmt-private">
+            <div class="comment-input-wrap">
+              <textarea id="privateInput" class="comment-textarea" placeholder="บันทึกสิ่งที่คุณสังเกตจากกราฟ... (อ่านได้คนเดียว)"></textarea>
+              <button class="comment-btn" type="button" onclick="savePrivateNote()">บันทึก</button>
+            </div>
+            <div id="privateList" class="comment-list"></div>
+          </div>
+          <div id="cmt-public" class="hidden-tab">
+            <div class="comment-input-wrap">
+              <textarea id="publicInput" class="comment-textarea" placeholder="แชร์มุมมองตลาด..."></textarea>
+              <button class="comment-btn" type="button" onclick="addPublicComment()">ส่ง</button>
+            </div>
+            <div id="publicList" class="comment-list"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- พื้นที่กราฟ TradingView ด้านล่าง (แสดงผลเต็มจอพอดี ไม่ทับซ้อน) -->
+<div class="chart-wrapper">
+  <div id="chart-container"></div>
+</div>
+
+<script>
+'use strict';
+
+const CONFIG = {
+    VERSION: '1.8.4',
+    MIN_RR: 2.5,
+    LIMITS: { maxComments: 50, maxNotes: 100 },
+    TV: { symbol: 'OANDA:XAUUSD', interval: '30', timezone: 'Asia/Bangkok' }
+};
+
+const STORAGE = {
+    privateNotes: 'mns_private_notes_v2',
+    publicComments: 'mns_public_comments_v2',
+    stats: 'mns_user_stats_v2',
+    lastMap: 'mns_last_map_v2',
+    lastPlan: 'mns_last_plan_v2'
+};
+
+let mapData = null;
+let planData = null;
+let planTime = null;
+let panelCollapsed = false;
+
+const $ = id => document.getElementById(id);
+const safeNumber = (v, f = 0) => Number.isFinite(Number(v)) ? Number(v) : f;
+const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+const round = (v, d = 2) => { const p = 10**d; return Math.round(v * p) / p; };
+const escapeHTML = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+const formatPrice = v => safeNumber(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nowTime = () => new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const nowDate = () => new Date().toLocaleDateString('th-TH');
+
+function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+function loadJSON(k, f) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : f; } catch(e) { return f; } }
+
+const UserStats = {
+    get() { return loadJSON(STORAGE.stats, { today: 0, total: 0, date: nowDate() }); },
+    touch() {
+        const s = this.get(), d = nowDate();
+        if(s.date !== d) { s.today = 0; s.date = d; }
+        s.today++; s.total++;
+        saveJSON(STORAGE.stats, s);
+        this.render();
+    },
+    render() {
+        const s = this.get();
+        if($('userToday')) $('userToday').textContent = s.today.toLocaleString('th-TH');
+        if($('userTotal')) $('userTotal').textContent = s.total.toLocaleString('th-TH');
+    }
+};
+
+const CommentSystem = {
+    getPrivateNotes() { return loadJSON(STORAGE.privateNotes, []); },
+    s
